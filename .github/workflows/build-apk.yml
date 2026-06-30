@@ -35,12 +35,17 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          echo "$KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
+          # Strip any CR/whitespace (Windows-set secrets can carry a trailing \r).
+          printf '%s' "$KEYSTORE_BASE64" | tr -d '\r\n ' | base64 -d > android/app/upload-keystore.jks
+          ls -l android/app/upload-keystore.jks
+          KS_PW=$(printf '%s' "$KEYSTORE_PASSWORD" | tr -d '\r\n')
+          KA=$(printf '%s' "$KEY_ALIAS" | tr -d '\r\n')
+          KP=$(printf '%s' "$KEY_PASSWORD" | tr -d '\r\n')
           cat > android/key.properties <<EOF
           storeFile=upload-keystore.jks
-          storePassword=$KEYSTORE_PASSWORD
-          keyAlias=$KEY_ALIAS
-          keyPassword=$KEY_PASSWORD
+          storePassword=$KS_PW
+          keyAlias=$KA
+          keyPassword=$KP
           EOF
 
       - run: flutter pub get

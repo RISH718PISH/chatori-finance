@@ -2,9 +2,11 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/design.dart';
 import '../../core/money.dart';
+import '../../data/export/report_exporter.dart';
 import '../../data/models/books.dart';
 import '../../data/models/txn.dart';
 import '../books/books_providers.dart';
@@ -36,7 +38,22 @@ class ReportsScreen extends ConsumerWidget {
         .fold<int>(0, (s, a) => s + a.outstandingPaise);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Reports')),
+      appBar: AppBar(
+        title: const Text('Reports'),
+        actions: [
+          IconButton(
+            tooltip: 'Share report',
+            icon: const Icon(Icons.ios_share),
+            onPressed: () => _showShareSheet(
+              context: context,
+              month: month,
+              txns: txnsAsync.asData?.value ?? const [],
+              salaryPaid: salaryPaid,
+              advanceOutstanding: advanceOutstanding,
+            ),
+          ),
+        ],
+      ),
       body: Column(
         children: [
           _MonthSelector(
@@ -315,3 +332,64 @@ class _BarList extends StatelessWidget {
     );
   }
 }
+
+void _showShareSheet({
+  required BuildContext context,
+  required DateTime month,
+  required List<Txn> txns,
+  required int salaryPaid,
+  required int advanceOutstanding,
+}) {
+  final monthLabel = DateFormat('MMMM yyyy').format(month);
+  showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (ctx) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.chat_bubble_outline),
+            title: const Text('Share summary text'),
+            subtitle: const Text('Paste into WhatsApp, email, or notes'),
+            onTap: () async {
+              Navigator.pop(ctx);
+              final text = ReportExporter.buildMonthlySummaryText(
+                month: month,
+                txns: txns,
+                salaryPaidPaise: salaryPaid,
+                advanceOutstandingPaise: advanceOutstanding,
+              );
+              await SharePlus.instance.share(
+                ShareParams(text: text, subject: 'Chatori Finance — $monthLabel'),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.table_chart_outlined),
+            title: const Text('Export CSV'),
+            subtitle: Text(
+                '${txns.length} entries · opens in Excel / Google Sheets'),
+            enabled: txns.isNotEmpty,
+            onTap: () async {
+              Navigator.pop(ctx);
+              final csv = ReportExporter.buildTransactionsCsv(txns);
+              final path = await ReportExporter.writeCsvToCache(
+                'chatori-${DateFormat('yyyy-MM').format(month)}.csv',
+                csv,
+              );
+              await SharePlus.instance.share(
+                ShareParams(
+                  files: [XFile(path, mimeType: 'text/csv')],
+                  subject: 'Chatori Finance CSV — $monthLabel',
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    ),
+  );
+}
+

@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/design.dart';
 import '../../core/money.dart';
+import '../../data/export/report_exporter.dart';
 import '../../data/models/txn.dart';
 import 'transaction_providers.dart';
 
@@ -76,6 +78,29 @@ class _TransactionsListScreenState
               }),
               icon: const Icon(Icons.filter_alt_off_outlined),
             ),
+          IconButton(
+            tooltip: 'Export filtered CSV',
+            icon: const Icon(Icons.ios_share),
+            onPressed: () async {
+              final all =
+                  ref.read(businessTxnsProvider).asData?.value ?? const <Txn>[];
+              final list = all.where(_matches).toList();
+              if (list.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text('No matching entries to export')));
+                return;
+              }
+              final csv = ReportExporter.buildTransactionsCsv(list);
+              final path = await ReportExporter.writeCsvToCache(
+                'chatori-transactions-${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.csv',
+                csv,
+              );
+              await SharePlus.instance.share(ShareParams(
+                files: [XFile(path, mimeType: 'text/csv')],
+                subject: 'Chatori Finance transactions (${list.length})',
+              ));
+            },
+          ),
         ],
       ),
       body: Column(

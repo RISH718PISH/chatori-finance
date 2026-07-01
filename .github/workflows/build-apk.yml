@@ -56,8 +56,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "1.9"
+          name: "1.10"
           body: |
-            Chatori Finance **1.9** — Kitchen Ledger design system (Inter + Geist typography, refined palette, tighter cards).
+            Chatori Finance **1.10** — pure white background (blank screens no longer feel dark).
             Download **app-release.apk** below and install it on your phone.
           files: build/app/outputs/flutter-apk/app-release.apk

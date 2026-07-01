@@ -12,7 +12,9 @@ import 'package:google_fonts/google_fonts.dart';
 class AppTheme {
   AppTheme._();
 
-  static const _bg = Color(0xFFF7F9FB);
+  // Scaffold + AppBar background. Kept pure white so blank screens don't
+  // look "dark" and cards remain visible via their 1px outline + soft shadow.
+  static const _bg = Color(0xFFFFFFFF);
   static const _surface = Color(0xFFFFFFFF);
   static const _surfaceContainer = Color(0xFFECEEF0);
   static const _surfaceContainerHigh = Color(0xFFE6E8EA);

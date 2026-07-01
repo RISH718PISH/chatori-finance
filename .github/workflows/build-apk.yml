@@ -52,12 +52,12 @@ jobs:
 
       - run: flutter build apk --release
 
-      - name: Publish APK to "latest" release
+      - name: Publish APK to release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: Latest build
+          name: "1.1"
           body: |
-            Latest Chatori Finance build from `main`.
+            Chatori Finance **1.1**.
             Download **app-release.apk** below and install it on your phone.
           files: build/app/outputs/flutter-apk/app-release.apk

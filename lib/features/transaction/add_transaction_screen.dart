@@ -7,10 +7,31 @@ import '../../core/category_icons.dart';
 import '../../core/money.dart';
 import 'transaction_providers.dart';
 
+/// Optional values to pre-fill the form (e.g. from a Paytm screenshot).
+class AddPrefill {
+  final String? type;
+  final int? amountPaise;
+  final String? party;
+  final String? notes;
+  final bool fromScreenshot;
+  const AddPrefill({
+    this.type,
+    this.amountPaise,
+    this.party,
+    this.notes,
+    this.fromScreenshot = false,
+  });
+}
+
 class AddTransactionScreen extends ConsumerStatefulWidget {
-  const AddTransactionScreen({super.key, this.initialType = 'expense'});
+  const AddTransactionScreen({
+    super.key,
+    this.initialType = 'expense',
+    this.prefill,
+  });
 
   final String initialType; // 'income' | 'expense'
+  final AddPrefill? prefill;
 
   @override
   ConsumerState<AddTransactionScreen> createState() =>
@@ -19,7 +40,20 @@ class AddTransactionScreen extends ConsumerStatefulWidget {
 
 class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   late String _type = widget.initialType;
+  late final String _source =
+      (widget.prefill?.fromScreenshot ?? false) ? 'screenshot' : 'manual';
   int _amountPaise = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    final p = widget.prefill;
+    if (p != null) {
+      if (p.amountPaise != null) _amountPaise = p.amountPaise!;
+      if (p.party != null) _partyController.text = p.party!;
+      if (p.notes != null) _noteController.text = p.notes!;
+    }
+  }
   SeedCategory? _category;
   String _paymentMode = 'Cash';
   String? _tag;
@@ -79,6 +113,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                 ? null
                 : _noteController.text.trim(),
             tag: _tag,
+            source: _source,
           );
       if (!mounted) return;
       final amount = Money.format(_amountPaise);

@@ -39,6 +39,20 @@ class TransactionRepository {
     await _client.from('transactions').delete().eq('id', id);
   }
 
+  /// All transactions in a given month (for reports).
+  Future<List<Txn>> fetchForMonth(String businessId, DateTime month) async {
+    final start = DateTime(month.year, month.month, 1);
+    final end = DateTime(month.year, month.month + 1, 1);
+    final rows = await _client
+        .from('transactions')
+        .select()
+        .eq('business_id', businessId)
+        .gte('occurred_at', start.toUtc().toIso8601String())
+        .lt('occurred_at', end.toUtc().toIso8601String())
+        .order('occurred_at', ascending: false);
+    return rows.map(Txn.fromJson).toList();
+  }
+
   /// Live stream of a business's transactions (newest first). Updates in
   /// real time when anyone in the business adds/edits/deletes an entry.
   Stream<List<Txn>> watchForBusiness(String businessId, {int limit = 500}) {

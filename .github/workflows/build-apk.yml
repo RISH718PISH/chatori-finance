@@ -56,8 +56,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "1.3"
+          name: "1.4"
           body: |
-            Chatori Finance **1.3** — staff advances in Salary screen, Customer Advance income + party field.
+            Chatori Finance **1.4** — Reports (charts) and Paytm screenshot reader (on-device OCR).
             Download **app-release.apk** below and install it on your phone.
           files: build/app/outputs/flutter-apk/app-release.apk

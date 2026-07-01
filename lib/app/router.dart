@@ -14,11 +14,14 @@ final appRouter = GoRouter(
     GoRoute(path: '/', builder: (_, _) => const HomeScreen()),
     GoRoute(
       path: '/add',
-      builder: (_, state) => AddTransactionScreen(
-        initialType: state.uri.queryParameters['type'] == 'income'
-            ? 'income'
-            : 'expense',
-      ),
+      builder: (_, state) {
+        final prefill = state.extra as AddPrefill?;
+        final type = prefill?.type ??
+            (state.uri.queryParameters['type'] == 'income'
+                ? 'income'
+                : 'expense');
+        return AddTransactionScreen(initialType: type, prefill: prefill);
+      },
     ),
     GoRoute(path: '/salary', builder: (_, _) => const SalaryScreen()),
     GoRoute(path: '/advances', builder: (_, _) => const AdvancesScreen()),

@@ -82,6 +82,7 @@ class BooksRepository {
     required int amountPaise,
     String? reason,
     DateTime? date,
+    String? linkedStaffId,
   }) async {
     await _client.from('advance_records').insert({
       'business_id': businessId,
@@ -91,6 +92,7 @@ class BooksRepository {
       'reason': reason,
       'date': (date ?? DateTime.now()).toIso8601String().substring(0, 10),
       'status': 'open',
+      'linked_staff_id': linkedStaffId,
     });
   }
 

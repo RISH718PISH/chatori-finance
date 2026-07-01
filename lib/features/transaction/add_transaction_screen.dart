@@ -175,11 +175,23 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                       ),
                   ],
                 ),
+                const SizedBox(height: 16),
+                _SectionLabel(_isIncome ? 'Customer / party' : 'Vendor / person'),
+                TextField(
+                  controller: _partyController,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: InputDecoration(
+                    hintText: _isIncome ? 'Who paid (optional)' : 'Paid to (optional)',
+                    border: const OutlineInputBorder(),
+                    isDense: true,
+                    prefixIcon: const Icon(Icons.person_outline),
+                  ),
+                ),
                 const SizedBox(height: 8),
                 TextButton.icon(
                   onPressed: () => setState(() => _showMore = !_showMore),
                   icon: Icon(_showMore ? Icons.expand_less : Icons.expand_more),
-                  label: Text(_showMore ? 'Less' : 'Add vendor / note / date'),
+                  label: Text(_showMore ? 'Less' : 'Add note / tag / date'),
                 ),
                 if (_showMore) _moreDetails(context),
               ],
@@ -218,16 +230,6 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 8),
-        TextField(
-          controller: _partyController,
-          textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(
-            labelText: 'Vendor / person (optional)',
-            border: OutlineInputBorder(),
-            isDense: true,
-          ),
-        ),
-        const SizedBox(height: 12),
         TextField(
           controller: _noteController,
           textCapitalization: TextCapitalization.sentences,

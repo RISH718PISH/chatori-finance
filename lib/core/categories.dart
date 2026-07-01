@@ -15,7 +15,8 @@ const List<SeedCategory> kSeedCategories = [
   // Income types
   SeedCategory('inc_catering', 'Catering', 'income', 'restaurant', 0),
   SeedCategory('inc_cloud', 'Cloud Kitchen', 'income', 'storefront', 1),
-  SeedCategory('inc_other', 'Other Income', 'income', 'payments', 2),
+  SeedCategory('inc_advance', 'Customer Advance', 'income', 'savings', 2),
+  SeedCategory('inc_other', 'Other Income', 'income', 'payments', 3),
 
   // Expense heads (PRD 9.3)
   SeedCategory('exp_salaries', 'Salaries', 'expense', 'badge', 0),

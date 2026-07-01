@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 const Map<String, IconData> kCategoryIcons = {
   'restaurant': Icons.restaurant,
   'storefront': Icons.storefront,
+  'savings': Icons.savings,
   'payments': Icons.payments,
   'badge': Icons.badge,
   'account_balance_wallet': Icons.account_balance_wallet,

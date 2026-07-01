@@ -50,3 +50,14 @@ int paidForStaffInMonth(List<SalaryRecord> records, String staffId, String month
   }
   return sum;
 }
+
+/// Outstanding advance balance for a staff member (open/partial advances).
+int advanceOutstandingForStaff(List<Advance> advances, String staffId) {
+  var sum = 0;
+  for (final a in advances) {
+    if (a.linkedStaffId == staffId && a.status != 'closed') {
+      sum += a.outstandingPaise;
+    }
+  }
+  return sum;
+}

@@ -60,6 +60,7 @@ class Advance {
   final String status; // open | partial | closed
   final DateTime date;
   final String? reason;
+  final String? linkedStaffId;
 
   const Advance({
     required this.id,
@@ -70,6 +71,7 @@ class Advance {
     required this.status,
     required this.date,
     this.reason,
+    this.linkedStaffId,
   });
 
   int get outstandingPaise => (amountPaise - recoveredPaise).clamp(0, amountPaise);
@@ -83,5 +85,6 @@ class Advance {
         status: (j['status'] as String?) ?? 'open',
         date: DateTime.parse(j['date'] as String),
         reason: j['reason'] as String?,
+        linkedStaffId: j['linked_staff_id'] as String?,
       );
 }

@@ -14,7 +14,8 @@ class SalaryScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final staffAsync = ref.watch(staffProvider);
-    final salaryAsync = ref.watch(salaryProvider);
+    final salary = ref.watch(salaryProvider).asData?.value ?? const <SalaryRecord>[];
+    final advances = ref.watch(advancesProvider).asData?.value ?? const <Advance>[];
     final month = currentMonthKey();
 
     return Scaffold(
@@ -33,7 +34,6 @@ class SalaryScreen extends ConsumerWidget {
                 icon: Icons.badge_outlined,
                 text: 'No staff yet.\nTap "Add staff" to begin.');
           }
-          final salary = salaryAsync.asData?.value ?? const <SalaryRecord>[];
           return ListView(
             padding: const EdgeInsets.all(12),
             children: [
@@ -41,8 +41,18 @@ class SalaryScreen extends ConsumerWidget {
                 _StaffCard(
                   staff: s,
                   paidThisMonth: paidForStaffInMonth(salary, s.id, month),
-                  onPay: () => _paySalary(context, ref, s,
-                      paidForStaffInMonth(salary, s.id, month)),
+                  advanceOutstanding: advanceOutstandingForStaff(advances, s.id),
+                  onPay: () => _paySalary(
+                      context, ref, s, paidForStaffInMonth(salary, s.id, month)),
+                  onGiveAdvance: () => _giveAdvance(context, ref, s),
+                  onRecover: () => _recoverAdvance(
+                      context,
+                      ref,
+                      s,
+                      advances
+                          .where((a) =>
+                              a.linkedStaffId == s.id && a.status != 'closed')
+                          .toList()),
                 ),
             ],
           );
@@ -71,14 +81,11 @@ class SalaryScreen extends ConsumerWidget {
               TextField(
                 controller: roleCtl,
                 textCapitalization: TextCapitalization.words,
-                decoration:
-                    const InputDecoration(labelText: 'Role (e.g. Cook)'),
+                decoration: const InputDecoration(labelText: 'Role (e.g. Cook)'),
               ),
               const SizedBox(height: 12),
               AmountField(
-                label: 'Monthly salary',
-                onChanged: (p) => salaryPaise = p,
-              ),
+                  label: 'Monthly salary', onChanged: (p) => salaryPaise = p),
             ],
           ),
         ),
@@ -114,29 +121,31 @@ class SalaryScreen extends ConsumerWidget {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) => AlertDialog(
           title: Text('Pay ${s.name}'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Pending this month: ${Money.format(pending)}'),
-              const SizedBox(height: 12),
-              AmountField(
-                label: 'Amount to pay',
-                initialPaise: pending,
-                onChanged: (p) => amountPaise = p,
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                children: [
-                  for (final m in kPaymentModes)
-                    ChoiceChip(
-                      label: Text(m),
-                      selected: mode == m,
-                      onSelected: (_) => setState(() => mode = m),
-                    ),
-                ],
-              ),
-            ],
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Pending this month: ${Money.format(pending)}'),
+                const SizedBox(height: 12),
+                AmountField(
+                  label: 'Amount to pay',
+                  initialPaise: pending,
+                  onChanged: (p) => amountPaise = p,
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final m in kPaymentModes)
+                      ChoiceChip(
+                        label: Text(m),
+                        selected: mode == m,
+                        onSelected: (_) => setState(() => mode = m),
+                      ),
+                  ],
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -166,23 +175,129 @@ class SalaryScreen extends ConsumerWidget {
           style: const TextStyle(color: Colors.white)),
     ));
   }
+
+  Future<void> _giveAdvance(BuildContext context, WidgetRef ref, Staff s) async {
+    final reasonCtl = TextEditingController();
+    var amountPaise = 0;
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Give advance to ${s.name}'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AmountField(
+                  label: 'Advance amount', onChanged: (p) => amountPaise = p),
+              const SizedBox(height: 12),
+              TextField(
+                controller: reasonCtl,
+                decoration:
+                    const InputDecoration(labelText: 'Reason (optional)'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Give')),
+        ],
+      ),
+    );
+    if (ok != true || amountPaise <= 0) return;
+    final biz = await ref.read(businessIdProvider.future);
+    if (biz == null) return;
+    await ref.read(booksRepoProvider).addAdvance(
+          businessId: biz,
+          personName: s.name,
+          personType: 'staff',
+          amountPaise: amountPaise,
+          reason: reasonCtl.text.trim().isEmpty ? null : reasonCtl.text.trim(),
+          linkedStaffId: s.id,
+        );
+    messenger.showSnackBar(SnackBar(
+      backgroundColor: Colors.green.shade700,
+      behavior: SnackBarBehavior.floating,
+      content: Text('Advance ${Money.format(amountPaise)} to ${s.name} ✓',
+          style: const TextStyle(color: Colors.white)),
+    ));
+  }
+
+  /// Recovers an amount against the staff's open advances, oldest first.
+  Future<void> _recoverAdvance(BuildContext context, WidgetRef ref, Staff s,
+      List<Advance> openAdvances) async {
+    final total = openAdvances.fold<int>(0, (sum, a) => sum + a.outstandingPaise);
+    var recoverPaise = total;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Recover advance from ${s.name}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Outstanding advance: ${Money.format(total)}'),
+            const SizedBox(height: 12),
+            AmountField(
+              label: 'Amount to recover / adjust',
+              initialPaise: total,
+              onChanged: (p) => recoverPaise = p,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Recover')),
+        ],
+      ),
+    );
+    if (ok != true || recoverPaise <= 0) return;
+    final repo = ref.read(booksRepoProvider);
+    var remaining = recoverPaise;
+    // Oldest first
+    final sorted = [...openAdvances]..sort((a, b) => a.date.compareTo(b.date));
+    for (final a in sorted) {
+      if (remaining <= 0) break;
+      final take = remaining < a.outstandingPaise ? remaining : a.outstandingPaise;
+      await repo.recoverAdvance(
+        id: a.id,
+        totalAmountPaise: a.amountPaise,
+        newRecoveredPaise: a.recoveredPaise + take,
+      );
+      remaining -= take;
+    }
+  }
 }
 
 class _StaffCard extends StatelessWidget {
   const _StaffCard({
     required this.staff,
     required this.paidThisMonth,
+    required this.advanceOutstanding,
     required this.onPay,
+    required this.onGiveAdvance,
+    required this.onRecover,
   });
 
   final Staff staff;
   final int paidThisMonth;
+  final int advanceOutstanding;
   final VoidCallback onPay;
+  final VoidCallback onGiveAdvance;
+  final VoidCallback onRecover;
 
   @override
   Widget build(BuildContext context) {
-    final pending =
-        (staff.monthlySalaryPaise - paidThisMonth).clamp(0, staff.monthlySalaryPaise);
+    final pending = (staff.monthlySalaryPaise - paidThisMonth)
+        .clamp(0, staff.monthlySalaryPaise);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -191,7 +306,8 @@ class _StaffCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                CircleAvatar(child: Text(staff.name.isNotEmpty ? staff.name[0] : '?')),
+                CircleAvatar(
+                    child: Text(staff.name.isNotEmpty ? staff.name[0] : '?')),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -212,26 +328,40 @@ class _StaffCard extends StatelessWidget {
             const SizedBox(height: 12),
             Row(
               children: [
-                _stat(context, 'Paid (this month)',
+                _stat(context, 'Paid (month)',
                     Money.format(paidThisMonth, decimals: false), Colors.green),
-                _stat(
-                    context,
-                    'Pending',
+                _stat(context, 'Pending',
                     Money.format(pending, decimals: false),
                     pending > 0 ? Colors.orange : Colors.green),
+                _stat(context, 'Advance',
+                    Money.format(advanceOutstanding, decimals: false),
+                    advanceOutstanding > 0 ? Colors.red : Colors.green),
               ],
             ),
             const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton.icon(
-                style: FilledButton.styleFrom(
-                    minimumSize: const Size(0, 40),
-                    padding: const EdgeInsets.symmetric(horizontal: 20)),
-                onPressed: onPay,
-                icon: const Icon(Icons.payments_outlined, size: 18),
-                label: const Text('Pay salary'),
-              ),
+            Wrap(
+              spacing: 8,
+              alignment: WrapAlignment.end,
+              children: [
+                if (advanceOutstanding > 0)
+                  OutlinedButton.icon(
+                    onPressed: onRecover,
+                    icon: const Icon(Icons.undo, size: 18),
+                    label: const Text('Recover'),
+                  ),
+                OutlinedButton.icon(
+                  onPressed: onGiveAdvance,
+                  icon: const Icon(Icons.account_balance_wallet_outlined,
+                      size: 18),
+                  label: const Text('Give advance'),
+                ),
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
+                  onPressed: onPay,
+                  icon: const Icon(Icons.payments_outlined, size: 18),
+                  label: const Text('Pay salary'),
+                ),
+              ],
             ),
           ],
         ),
@@ -246,7 +376,8 @@ class _StaffCard extends StatelessWidget {
         children: [
           Text(label, style: Theme.of(context).textTheme.bodySmall),
           Text(value,
-              style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 18)),
+              style: TextStyle(
+                  color: color, fontWeight: FontWeight.bold, fontSize: 16)),
         ],
       ),
     );

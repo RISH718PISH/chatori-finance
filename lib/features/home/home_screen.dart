@@ -12,7 +12,7 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final totals = ref.watch(todayTotalsProvider).asData?.value ?? Totals.zero;
+    final totals = ref.watch(todayTotalsProvider);
     final recent = ref.watch(recentTransactionsProvider);
 
     return Scaffold(
@@ -26,7 +26,7 @@ class HomeScreen extends ConsumerWidget {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () async => refreshTransactions(ref),
+        onRefresh: () async => ref.invalidate(businessTxnsProvider),
         child: ListView(
         padding: const EdgeInsets.all(16),
         physics: const AlwaysScrollableScrollPhysics(),

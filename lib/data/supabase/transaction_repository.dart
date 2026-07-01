@@ -2,7 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/txn.dart';
 
-/// Supabase-backed transaction data access (online-first).
+/// Supabase-backed transaction data access with real-time streaming.
 class TransactionRepository {
   TransactionRepository(this._client);
 
@@ -39,28 +39,19 @@ class TransactionRepository {
     await _client.from('transactions').delete().eq('id', id);
   }
 
-  /// Most recent transactions for a business, newest first.
-  Future<List<Txn>> recent(String businessId, {int limit = 10}) async {
-    final rows = await _client
+  /// Live stream of a business's transactions (newest first). Updates in
+  /// real time when anyone in the business adds/edits/deletes an entry.
+  Stream<List<Txn>> watchForBusiness(String businessId, {int limit = 500}) {
+    return _client
         .from('transactions')
-        .select()
+        .stream(primaryKey: ['id'])
         .eq('business_id', businessId)
-        .order('occurred_at', ascending: false)
-        .limit(limit);
-    return rows.map(Txn.fromJson).toList();
-  }
-
-  /// All transactions on a given calendar day.
-  Future<List<Txn>> forDay(String businessId, DateTime day) async {
-    final start = DateTime(day.year, day.month, day.day);
-    final end = start.add(const Duration(days: 1));
-    final rows = await _client
-        .from('transactions')
-        .select()
-        .eq('business_id', businessId)
-        .gte('occurred_at', start.toUtc().toIso8601String())
-        .lt('occurred_at', end.toUtc().toIso8601String())
-        .order('occurred_at', ascending: false);
-    return rows.map(Txn.fromJson).toList();
+        .order('occurred_at')
+        .limit(limit)
+        .map((rows) {
+          final list = rows.map(Txn.fromJson).toList();
+          list.sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+          return list;
+        });
   }
 }

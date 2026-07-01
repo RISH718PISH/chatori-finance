@@ -81,15 +81,30 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
             tag: _tag,
           );
       if (!mounted) return;
-      refreshTransactions(ref);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '${_isIncome ? 'Income' : 'Expense'} of ${Money.format(_amountPaise)} saved',
-          ),
-        ),
-      );
+      final amount = Money.format(_amountPaise);
+      final label = _isIncome ? 'Income' : 'Expense';
+      final messenger = ScaffoldMessenger.of(context);
       context.pop();
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.green.shade700,
+            duration: const Duration(seconds: 2),
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text('$label of $amount saved ✓',
+                      style: const TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.w600)),
+                ),
+              ],
+            ),
+          ),
+        );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

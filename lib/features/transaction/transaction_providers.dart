@@ -21,33 +21,38 @@ final authChangeProvider = StreamProvider<AuthState>(
   (ref) => ref.watch(authRepoProvider).onAuthChange,
 );
 
-/// The current user's business id (cached for the session).
-final businessIdProvider = FutureProvider<String?>(
-  (ref) {
-    ref.watch(authChangeProvider); // refetch on login/logout
-    return ref.watch(authRepoProvider).currentBusinessId();
-  },
-);
+/// The current user's business id.
+final businessIdProvider = FutureProvider<String?>((ref) {
+  ref.watch(authChangeProvider);
+  return ref.watch(authRepoProvider).currentBusinessId();
+});
 
-/// Most recent transactions for the dashboard.
+/// Live stream of all the business's transactions (one realtime subscription
+/// that both the recent list and today's totals are derived from).
+final businessTxnsProvider = StreamProvider.autoDispose<List<Txn>>((ref) async* {
+  final biz = await ref.watch(businessIdProvider.future);
+  if (biz == null) {
+    yield const [];
+    return;
+  }
+  yield* ref.watch(transactionRepoProvider).watchForBusiness(biz);
+});
+
+/// Most recent transactions (derived from the live stream).
 final recentTransactionsProvider =
-    FutureProvider.autoDispose<List<Txn>>((ref) async {
-  final biz = await ref.watch(businessIdProvider.future);
-  if (biz == null) return const [];
-  return ref.watch(transactionRepoProvider).recent(biz);
+    Provider.autoDispose<AsyncValue<List<Txn>>>((ref) {
+  return ref
+      .watch(businessTxnsProvider)
+      .whenData((all) => all.take(12).toList());
 });
 
-/// Income/expense/net totals for today.
-final todayTotalsProvider = FutureProvider.autoDispose<Totals>((ref) async {
-  final biz = await ref.watch(businessIdProvider.future);
-  if (biz == null) return Totals.zero;
-  final txns =
-      await ref.watch(transactionRepoProvider).forDay(biz, DateTime.now());
-  return Totals.fromTxns(txns);
+/// Income/expense/net totals for today (derived from the live stream).
+final todayTotalsProvider = Provider.autoDispose<Totals>((ref) {
+  final all = ref.watch(businessTxnsProvider).asData?.value ?? const [];
+  final now = DateTime.now();
+  final todays = all.where((t) =>
+      t.occurredAt.year == now.year &&
+      t.occurredAt.month == now.month &&
+      t.occurredAt.day == now.day);
+  return Totals.fromTxns(todays);
 });
-
-/// Call after adding/editing/deleting to refresh the dashboard.
-void refreshTransactions(WidgetRef ref) {
-  ref.invalidate(recentTransactionsProvider);
-  ref.invalidate(todayTotalsProvider);
-}

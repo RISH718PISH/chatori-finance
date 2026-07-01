@@ -56,8 +56,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "1.1"
+          name: "1.2"
           body: |
-            Chatori Finance **1.1**.
+            Chatori Finance **1.2** — real-time sync, save confirmation, Salary & Advances.
             Download **app-release.apk** below and install it on your phone.
           files: build/app/outputs/flutter-apk/app-release.apk

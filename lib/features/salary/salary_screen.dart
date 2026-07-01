@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/categories.dart';
 import '../../core/money.dart';
 import '../../data/models/books.dart';
 import '../books/books_providers.dart';
@@ -14,8 +13,10 @@ class SalaryScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final staffAsync = ref.watch(staffProvider);
-    final salary = ref.watch(salaryProvider).asData?.value ?? const <SalaryRecord>[];
-    final advances = ref.watch(advancesProvider).asData?.value ?? const <Advance>[];
+    final salary =
+        ref.watch(salaryProvider).asData?.value ?? const <SalaryRecord>[];
+    final advances =
+        ref.watch(advancesProvider).asData?.value ?? const <Advance>[];
     final month = currentMonthKey();
 
     return Scaffold(
@@ -38,27 +39,42 @@ class SalaryScreen extends ConsumerWidget {
             padding: const EdgeInsets.all(12),
             children: [
               for (final s in staff)
-                _StaffCard(
-                  staff: s,
-                  paidThisMonth: paidForStaffInMonth(salary, s.id, month),
-                  advanceOutstanding: advanceOutstandingForStaff(advances, s.id),
-                  onPay: () => _paySalary(
-                      context, ref, s, paidForStaffInMonth(salary, s.id, month)),
-                  onGiveAdvance: () => _giveAdvance(context, ref, s),
-                  onRecover: () => _recoverAdvance(
-                      context,
-                      ref,
-                      s,
-                      advances
-                          .where((a) =>
-                              a.linkedStaffId == s.id && a.status != 'closed')
-                          .toList()),
-                ),
+                Builder(builder: (_) {
+                  final paid = paidForStaffInMonth(salary, s.id, month);
+                  final adjusted = adjustedForStaffInMonth(salary, s.id, month);
+                  final outstanding =
+                      advanceOutstandingForStaff(advances, s.id);
+                  final openAdvances = advances
+                      .where((a) =>
+                          a.linkedStaffId == s.id && a.status != 'closed')
+                      .toList();
+                  return _StaffCard(
+                    staff: s,
+                    paid: paid,
+                    outstanding: outstanding,
+                    netToPay: _netToPay(s.monthlySalaryPaise, paid, adjusted,
+                        outstanding),
+                    onPay: () => _paySalary(
+                        context, ref, s, paid, adjusted, outstanding,
+                        openAdvances),
+                    onGiveAdvance: () => _giveAdvance(context, ref, s),
+                    onRecover: () =>
+                        _recoverAdvance(context, ref, s, openAdvances),
+                  );
+                }),
             ],
           );
         },
       ),
     );
+  }
+
+  static int _remainingSalary(int monthly, int paid, int adjusted) =>
+      (monthly - paid - adjusted).clamp(0, monthly);
+
+  static int _netToPay(int monthly, int paid, int adjusted, int outstanding) {
+    final remaining = _remainingSalary(monthly, paid, adjusted);
+    return (remaining - outstanding).clamp(0, remaining);
   }
 
   Future<void> _addStaff(BuildContext context, WidgetRef ref) async {
@@ -110,12 +126,18 @@ class SalaryScreen extends ConsumerWidget {
         );
   }
 
-  Future<void> _paySalary(
-      BuildContext context, WidgetRef ref, Staff s, int paid) async {
-    final pending = (s.monthlySalaryPaise - paid).clamp(0, s.monthlySalaryPaise);
-    var amountPaise = pending;
-    var mode = 'Cash';
+  Future<void> _paySalary(BuildContext context, WidgetRef ref, Staff s, int paid,
+      int adjusted, int outstanding, List<Advance> openAdvances) async {
+    final monthly = s.monthlySalaryPaise;
+    final remaining = _remainingSalary(monthly, paid, adjusted);
+    final net = _netToPay(monthly, paid, adjusted, outstanding);
+    // How much advance can actually be deducted this month.
+    final deductable = outstanding.clamp(0, remaining);
+
+    var deductAdvance = deductable > 0;
+    var cashPaise = deductAdvance ? net : remaining;
     final messenger = ScaffoldMessenger.of(context);
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -124,25 +146,30 @@ class SalaryScreen extends ConsumerWidget {
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Pending this month: ${Money.format(pending)}'),
-                const SizedBox(height: 12),
+                Text('Monthly ${Money.format(monthly)}'),
+                Text('Already paid this month: ${Money.format(paid)}'),
+                if (deductable > 0)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      value: deductAdvance,
+                      title: Text('Deduct advance (${Money.format(deductable)})'),
+                      onChanged: (v) => setState(() {
+                        deductAdvance = v ?? false;
+                        cashPaise = deductAdvance ? net : remaining;
+                      }),
+                    ),
+                  ),
+                const SizedBox(height: 8),
                 AmountField(
-                  label: 'Amount to pay',
-                  initialPaise: pending,
-                  onChanged: (p) => amountPaise = p,
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    for (final m in kPaymentModes)
-                      ChoiceChip(
-                        label: Text(m),
-                        selected: mode == m,
-                        onSelected: (_) => setState(() => mode = m),
-                      ),
-                  ],
+                  key: ValueKey(deductAdvance),
+                  label: 'Pay in cash now',
+                  initialPaise: deductAdvance ? net : remaining,
+                  onChanged: (p) => cashPaise = p,
                 ),
               ],
             ),
@@ -158,21 +185,47 @@ class SalaryScreen extends ConsumerWidget {
         ),
       ),
     );
-    if (ok != true || amountPaise <= 0) return;
+    if (ok != true) return;
+    final adjustNow = deductAdvance ? deductable : 0;
+    if (cashPaise <= 0 && adjustNow <= 0) return;
+
     final biz = await ref.read(businessIdProvider.future);
     if (biz == null) return;
-    await ref.read(booksRepoProvider).paySalary(
-          businessId: biz,
-          staffId: s.id,
-          amountPaise: amountPaise,
-          month: currentMonthKey(),
-          paymentMode: mode,
+    final repo = ref.read(booksRepoProvider);
+
+    await repo.paySalary(
+      businessId: biz,
+      staffId: s.id,
+      amountPaise: cashPaise,
+      advanceAdjustedPaise: adjustNow,
+      month: currentMonthKey(),
+      paymentMode: 'Cash',
+    );
+
+    // Settle the deducted advance against the staff's open advances (oldest first).
+    if (adjustNow > 0) {
+      var remainingAdj = adjustNow;
+      final sorted = [...openAdvances]..sort((a, b) => a.date.compareTo(b.date));
+      for (final a in sorted) {
+        if (remainingAdj <= 0) break;
+        final take =
+            remainingAdj < a.outstandingPaise ? remainingAdj : a.outstandingPaise;
+        await repo.recoverAdvance(
+          id: a.id,
+          totalAmountPaise: a.amountPaise,
+          newRecoveredPaise: a.recoveredPaise + take,
         );
+        remainingAdj -= take;
+      }
+    }
+
+    final msg = adjustNow > 0
+        ? 'Paid ${Money.format(cashPaise)} + ${Money.format(adjustNow)} advance adjusted ✓'
+        : 'Paid ${Money.format(cashPaise)} to ${s.name} ✓';
     messenger.showSnackBar(SnackBar(
       backgroundColor: Colors.green.shade700,
       behavior: SnackBarBehavior.floating,
-      content: Text('Paid ${Money.format(amountPaise)} to ${s.name} ✓',
-          style: const TextStyle(color: Colors.white)),
+      content: Text(msg, style: const TextStyle(color: Colors.white)),
     ));
   }
 
@@ -193,8 +246,7 @@ class SalaryScreen extends ConsumerWidget {
               const SizedBox(height: 12),
               TextField(
                 controller: reasonCtl,
-                decoration:
-                    const InputDecoration(labelText: 'Reason (optional)'),
+                decoration: const InputDecoration(labelText: 'Reason (optional)'),
               ),
             ],
           ),
@@ -228,7 +280,6 @@ class SalaryScreen extends ConsumerWidget {
     ));
   }
 
-  /// Recovers an amount against the staff's open advances, oldest first.
   Future<void> _recoverAdvance(BuildContext context, WidgetRef ref, Staff s,
       List<Advance> openAdvances) async {
     final total = openAdvances.fold<int>(0, (sum, a) => sum + a.outstandingPaise);
@@ -262,11 +313,11 @@ class SalaryScreen extends ConsumerWidget {
     if (ok != true || recoverPaise <= 0) return;
     final repo = ref.read(booksRepoProvider);
     var remaining = recoverPaise;
-    // Oldest first
     final sorted = [...openAdvances]..sort((a, b) => a.date.compareTo(b.date));
     for (final a in sorted) {
       if (remaining <= 0) break;
-      final take = remaining < a.outstandingPaise ? remaining : a.outstandingPaise;
+      final take =
+          remaining < a.outstandingPaise ? remaining : a.outstandingPaise;
       await repo.recoverAdvance(
         id: a.id,
         totalAmountPaise: a.amountPaise,
@@ -280,24 +331,24 @@ class SalaryScreen extends ConsumerWidget {
 class _StaffCard extends StatelessWidget {
   const _StaffCard({
     required this.staff,
-    required this.paidThisMonth,
-    required this.advanceOutstanding,
+    required this.paid,
+    required this.outstanding,
+    required this.netToPay,
     required this.onPay,
     required this.onGiveAdvance,
     required this.onRecover,
   });
 
   final Staff staff;
-  final int paidThisMonth;
-  final int advanceOutstanding;
+  final int paid;
+  final int outstanding;
+  final int netToPay;
   final VoidCallback onPay;
   final VoidCallback onGiveAdvance;
   final VoidCallback onRecover;
 
   @override
   Widget build(BuildContext context) {
-    final pending = (staff.monthlySalaryPaise - paidThisMonth)
-        .clamp(0, staff.monthlySalaryPaise);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -315,27 +366,25 @@ class _StaffCard extends StatelessWidget {
                     children: [
                       Text(staff.name,
                           style: Theme.of(context).textTheme.titleMedium),
-                      if (staff.role != null)
-                        Text(staff.role!,
-                            style: Theme.of(context).textTheme.bodySmall),
+                      Text(
+                          '${staff.role ?? 'Staff'} · ${Money.format(staff.monthlySalaryPaise, decimals: false)}/mo',
+                          style: Theme.of(context).textTheme.bodySmall),
                     ],
                   ),
                 ),
-                Text(Money.format(staff.monthlySalaryPaise, decimals: false),
-                    style: Theme.of(context).textTheme.titleSmall),
               ],
             ),
             const SizedBox(height: 12),
             Row(
               children: [
                 _stat(context, 'Paid (month)',
-                    Money.format(paidThisMonth, decimals: false), Colors.green),
-                _stat(context, 'Pending',
-                    Money.format(pending, decimals: false),
-                    pending > 0 ? Colors.orange : Colors.green),
+                    Money.format(paid, decimals: false), Colors.green),
                 _stat(context, 'Advance',
-                    Money.format(advanceOutstanding, decimals: false),
-                    advanceOutstanding > 0 ? Colors.red : Colors.green),
+                    Money.format(outstanding, decimals: false),
+                    outstanding > 0 ? Colors.red : Colors.green),
+                _stat(context, 'To pay',
+                    Money.format(netToPay, decimals: false),
+                    netToPay > 0 ? Colors.orange : Colors.green),
               ],
             ),
             const SizedBox(height: 8),
@@ -343,7 +392,7 @@ class _StaffCard extends StatelessWidget {
               spacing: 8,
               alignment: WrapAlignment.end,
               children: [
-                if (advanceOutstanding > 0)
+                if (outstanding > 0)
                   OutlinedButton.icon(
                     onPressed: onRecover,
                     icon: const Icon(Icons.undo, size: 18),

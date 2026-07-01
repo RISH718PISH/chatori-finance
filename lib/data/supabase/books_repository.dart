@@ -48,12 +48,14 @@ class BooksRepository {
     required int amountPaise,
     required String month, // YYYY-MM
     required String paymentMode,
+    int advanceAdjustedPaise = 0,
     DateTime? paymentDate,
   }) async {
     await _client.from('salary_records').insert({
       'business_id': businessId,
       'staff_id': staffId,
       'amount_paid_paise': amountPaise,
+      'advance_adjusted_paise': advanceAdjustedPaise,
       'month': month,
       'payment_date':
           (paymentDate ?? DateTime.now()).toIso8601String().substring(0, 10),

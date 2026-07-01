@@ -56,6 +56,11 @@ android {
                 // Fall back to debug signing when no release key is configured.
                 signingConfigs.getByName("debug")
             }
+            // Disable R8 shrinking: ML Kit references optional script recognizers
+            // (Chinese/Japanese/Korean/Devanagari) that aren't bundled, which
+            // makes R8 fail on missing classes. We only use Latin OCR.
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }

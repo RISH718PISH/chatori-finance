@@ -51,6 +51,18 @@ int paidForStaffInMonth(List<SalaryRecord> records, String staffId, String month
   return sum;
 }
 
+/// Advance paise adjusted against [staffId]'s salary in [month].
+int adjustedForStaffInMonth(
+    List<SalaryRecord> records, String staffId, String month) {
+  var sum = 0;
+  for (final r in records) {
+    if (r.staffId == staffId && r.month == month) {
+      sum += r.advanceAdjustedPaise;
+    }
+  }
+  return sum;
+}
+
 /// Outstanding advance balance for a staff member (open/partial advances).
 int advanceOutstandingForStaff(List<Advance> advances, String staffId) {
   var sum = 0;

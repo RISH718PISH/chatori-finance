@@ -28,6 +28,7 @@ class SalaryRecord {
   final String id;
   final String? staffId;
   final int amountPaidPaise;
+  final int advanceAdjustedPaise;
   final String month; // YYYY-MM
   final DateTime paymentDate;
   final String paymentMode;
@@ -36,6 +37,7 @@ class SalaryRecord {
     required this.id,
     required this.staffId,
     required this.amountPaidPaise,
+    required this.advanceAdjustedPaise,
     required this.month,
     required this.paymentDate,
     required this.paymentMode,
@@ -45,6 +47,8 @@ class SalaryRecord {
         id: j['id'] as String,
         staffId: j['staff_id'] as String?,
         amountPaidPaise: (j['amount_paid_paise'] as num).toInt(),
+        advanceAdjustedPaise:
+            (j['advance_adjusted_paise'] as num?)?.toInt() ?? 0,
         month: j['month'] as String,
         paymentDate: DateTime.parse(j['payment_date'] as String),
         paymentMode: j['payment_mode'] as String,

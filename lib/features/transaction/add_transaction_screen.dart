@@ -116,6 +116,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
             source: _source,
           );
       if (!mounted) return;
+      refreshTransactions(ref);
       final amount = Money.format(_amountPaise);
       final label = _isIncome ? 'Income' : 'Expense';
       final messenger = ScaffoldMessenger.of(context);

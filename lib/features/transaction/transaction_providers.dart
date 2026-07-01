@@ -21,34 +21,30 @@ final authChangeProvider = StreamProvider<AuthState>(
   (ref) => ref.watch(authRepoProvider).onAuthChange,
 );
 
-/// The current user's business id. Cached for the session — it does not depend
-/// on auth *ticks* (token refreshes), which previously caused every dependent
-/// stream to re-subscribe and flicker. It's invalidated on sign-out.
+/// The current user's business id. Cached for the session — stable across
+/// token refreshes so dependent screens don't reload on every auth tick.
 final businessIdProvider = FutureProvider<String?>((ref) {
   return ref.watch(authRepoProvider).currentBusinessId();
 });
 
-/// Live stream of all the business's transactions (one realtime subscription
-/// that both the recent list and today's totals are derived from).
-final businessTxnsProvider = StreamProvider.autoDispose<List<Txn>>((ref) async* {
+/// Cached one-shot fetch of the recent transactions for this business.
+/// Refreshed via [refreshTransactions] after any save.
+final businessTxnsProvider = FutureProvider<List<Txn>>((ref) async {
   final biz = await ref.watch(businessIdProvider.future);
-  if (biz == null) {
-    yield const [];
-    return;
-  }
-  yield* ref.watch(transactionRepoProvider).watchForBusiness(biz);
+  if (biz == null) return const [];
+  return ref.watch(transactionRepoProvider).recent(biz);
 });
 
-/// Most recent transactions (derived from the live stream).
+/// Top-N transactions for the "Recent" list on Home.
 final recentTransactionsProvider =
-    Provider.autoDispose<AsyncValue<List<Txn>>>((ref) {
+    Provider<AsyncValue<List<Txn>>>((ref) {
   return ref
       .watch(businessTxnsProvider)
       .whenData((all) => all.take(12).toList());
 });
 
-/// Income/expense/net totals for today (derived from the live stream).
-final todayTotalsProvider = Provider.autoDispose<Totals>((ref) {
+/// Income/expense totals for today (derived).
+final todayTotalsProvider = Provider<Totals>((ref) {
   final all = ref.watch(businessTxnsProvider).asData?.value ?? const [];
   final now = DateTime.now();
   final todays = all.where((t) =>
@@ -57,3 +53,14 @@ final todayTotalsProvider = Provider.autoDispose<Totals>((ref) {
       t.occurredAt.day == now.day);
   return Totals.fromTxns(todays);
 });
+
+/// Customer advances (income category "Customer Advance"), newest first.
+final customerAdvancesProvider = Provider<List<Txn>>((ref) {
+  final all = ref.watch(businessTxnsProvider).asData?.value ?? const [];
+  return all.where((t) => t.category == 'Customer Advance').toList();
+});
+
+/// Call after adding / editing / deleting a transaction.
+void refreshTransactions(WidgetRef ref) {
+  ref.invalidate(businessTxnsProvider);
+}

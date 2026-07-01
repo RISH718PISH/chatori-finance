@@ -14,6 +14,7 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final totals = ref.watch(todayTotalsProvider);
     final recent = ref.watch(recentTransactionsProvider);
+    final custAdv = ref.watch(customerAdvancesProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -26,7 +27,14 @@ class HomeScreen extends ConsumerWidget {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () async => ref.invalidate(businessTxnsProvider),
+        onRefresh: () async {
+          ref.invalidate(businessTxnsProvider);
+          try {
+            await ref.read(businessTxnsProvider.future);
+          } catch (_) {
+            /* surfaced in the recent list's error state */
+          }
+        },
         child: ListView(
         padding: const EdgeInsets.all(16),
         physics: const AlwaysScrollableScrollPhysics(),
@@ -104,6 +112,12 @@ class HomeScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 20),
+
+          // --- Customer advances ---
+          if (custAdv.isNotEmpty) ...[
+            _CustomerAdvancesSection(advances: custAdv),
+            const SizedBox(height: 20),
+          ],
 
           // --- Recent entries ---
           Text('Recent', style: Theme.of(context).textTheme.titleMedium),
@@ -219,6 +233,78 @@ class _TxnTile extends StatelessWidget {
       trailing: Text(
         '${isIncome ? '+' : '−'}${Money.format(txn.amountPaise)}',
         style: TextStyle(color: color, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+}
+
+class _CustomerAdvancesSection extends StatelessWidget {
+  const _CustomerAdvancesSection({required this.advances});
+  final List<Txn> advances;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = advances.fold<int>(0, (s, t) => s + t.amountPaise);
+    final show = advances.take(4).toList();
+    return Card(
+      color: Colors.green.withValues(alpha: 0.08),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: Colors.green.withValues(alpha: 0.4)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.savings, color: Colors.green),
+                const SizedBox(width: 8),
+                Expanded(
+                    child: Text('Customer advances',
+                        style: Theme.of(context).textTheme.titleMedium)),
+                Text(Money.format(total, decimals: false),
+                    style: const TextStyle(
+                        color: Colors.green, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            for (final t in show)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    const Icon(Icons.person_outline, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        (t.partyName?.isNotEmpty ?? false)
+                            ? t.partyName!
+                            : 'Unnamed customer',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(DateFormat('d MMM').format(t.occurredAt),
+                        style: Theme.of(context).textTheme.bodySmall),
+                    const SizedBox(width: 12),
+                    Text(Money.format(t.amountPaise),
+                        style: const TextStyle(
+                            color: Colors.green, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+            if (advances.length > show.length)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text('+ ${advances.length - show.length} more',
+                    style: Theme.of(context).textTheme.bodySmall),
+              ),
+          ],
+        ),
       ),
     );
   }

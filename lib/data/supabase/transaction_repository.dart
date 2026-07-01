@@ -53,19 +53,15 @@ class TransactionRepository {
     return rows.map(Txn.fromJson).toList();
   }
 
-  /// Live stream of a business's transactions (newest first). Updates in
-  /// real time when anyone in the business adds/edits/deletes an entry.
-  Stream<List<Txn>> watchForBusiness(String businessId, {int limit = 500}) {
-    return _client
+  /// Recent transactions for a business (newest first). Cached one-shot fetch;
+  /// refreshed after mutations and on pull-to-refresh.
+  Future<List<Txn>> recent(String businessId, {int limit = 500}) async {
+    final rows = await _client
         .from('transactions')
-        .stream(primaryKey: ['id'])
+        .select()
         .eq('business_id', businessId)
-        .order('occurred_at')
-        .limit(limit)
-        .map((rows) {
-          final list = rows.map(Txn.fromJson).toList();
-          list.sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
-          return list;
-        });
+        .order('occurred_at', ascending: false)
+        .limit(limit);
+    return rows.map(Txn.fromJson).toList();
   }
 }

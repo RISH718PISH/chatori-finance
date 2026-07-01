@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/money.dart';
 import '../../data/models/books.dart';
 import '../books/books_providers.dart';
 import '../transaction/transaction_providers.dart';
 import '../widgets/amount_field.dart';
+import '../widgets/date_field.dart';
 
 class SalaryScreen extends ConsumerWidget {
   const SalaryScreen({super.key});
@@ -54,12 +56,17 @@ class SalaryScreen extends ConsumerWidget {
                       .where((a) =>
                           a.linkedStaffId == s.id && a.status != 'closed')
                       .toList();
+                  final allAdvances = advances
+                      .where((a) => a.linkedStaffId == s.id)
+                      .toList()
+                    ..sort((a, b) => b.date.compareTo(a.date));
                   return _StaffCard(
                     staff: s,
                     paid: paid,
                     outstanding: outstanding,
                     netToPay: _netToPay(s.monthlySalaryPaise, paid, adjusted,
                         outstanding),
+                    advanceHistory: allAdvances,
                     onPay: () => _paySalary(
                         context, ref, s, paid, adjusted, outstanding,
                         openAdvances),
@@ -144,6 +151,7 @@ class SalaryScreen extends ConsumerWidget {
 
     var deductAdvance = deductable > 0;
     var cashPaise = deductAdvance ? net : remaining;
+    var payDate = DateTime.now();
     final messenger = ScaffoldMessenger.of(context);
 
     final ok = await showDialog<bool>(
@@ -179,6 +187,11 @@ class SalaryScreen extends ConsumerWidget {
                   initialPaise: deductAdvance ? net : remaining,
                   onChanged: (p) => cashPaise = p,
                 ),
+                const SizedBox(height: 12),
+                DateField(
+                    label: 'Payment date',
+                    initial: payDate,
+                    onChanged: (d) => payDate = d),
               ],
             ),
           ),
@@ -208,6 +221,7 @@ class SalaryScreen extends ConsumerWidget {
       advanceAdjustedPaise: adjustNow,
       month: currentMonthKey(),
       paymentMode: 'Cash',
+      paymentDate: payDate,
     );
 
     // Settle the deducted advance against the staff's open advances (oldest first).
@@ -243,6 +257,7 @@ class SalaryScreen extends ConsumerWidget {
   Future<void> _giveAdvance(BuildContext context, WidgetRef ref, Staff s) async {
     final reasonCtl = TextEditingController();
     var amountPaise = 0;
+    var date = DateTime.now();
     final messenger = ScaffoldMessenger.of(context);
     final ok = await showDialog<bool>(
       context: context,
@@ -254,6 +269,9 @@ class SalaryScreen extends ConsumerWidget {
             children: [
               AmountField(
                   label: 'Advance amount', onChanged: (p) => amountPaise = p),
+              const SizedBox(height: 12),
+              DateField(
+                  label: 'Date given', initial: date, onChanged: (d) => date = d),
               const SizedBox(height: 12),
               TextField(
                 controller: reasonCtl,
@@ -282,6 +300,7 @@ class SalaryScreen extends ConsumerWidget {
           amountPaise: amountPaise,
           reason: reasonCtl.text.trim().isEmpty ? null : reasonCtl.text.trim(),
           linkedStaffId: s.id,
+          date: date,
         );
     ref.invalidate(advancesProvider);
     messenger.showSnackBar(SnackBar(
@@ -347,6 +366,7 @@ class _StaffCard extends StatelessWidget {
     required this.paid,
     required this.outstanding,
     required this.netToPay,
+    required this.advanceHistory,
     required this.onPay,
     required this.onGiveAdvance,
     required this.onRecover,
@@ -356,6 +376,7 @@ class _StaffCard extends StatelessWidget {
   final int paid;
   final int outstanding;
   final int netToPay;
+  final List<Advance> advanceHistory;
   final VoidCallback onPay;
   final VoidCallback onGiveAdvance;
   final VoidCallback onRecover;
@@ -400,6 +421,63 @@ class _StaffCard extends StatelessWidget {
                     netToPay > 0 ? Colors.orange : Colors.green),
               ],
             ),
+            if (advanceHistory.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Theme(
+                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  childrenPadding: EdgeInsets.zero,
+                  dense: true,
+                  leading: const Icon(Icons.event_note, size: 20),
+                  title: Text(
+                      'Advance history (${advanceHistory.length})',
+                      style: Theme.of(context).textTheme.bodyMedium),
+                  children: [
+                    for (final a in advanceHistory.take(5))
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            Icon(
+                              a.status == 'closed'
+                                  ? Icons.check_circle
+                                  : Icons.radio_button_unchecked,
+                              size: 16,
+                              color: a.status == 'closed'
+                                  ? Colors.green
+                                  : Colors.orange,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                DateFormat('d MMM yyyy').format(a.date),
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
+                            Text(
+                              Money.format(a.amountPaise, decimals: false),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(fontWeight: FontWeight.w600),
+                            ),
+                            if (a.status != 'closed' && a.recoveredPaise > 0)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 6),
+                                child: Text(
+                                  '(−${Money.format(a.recoveredPaise, decimals: false)})',
+                                  style: const TextStyle(
+                                      fontSize: 11, color: Colors.grey),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,

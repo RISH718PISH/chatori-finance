@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required for cloud sync (Supabase). Debug builds add this automatically,
+         but release builds need it declared here. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Required by local_auth for the biometric prompt. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <application

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/design.dart';
 import '../../core/money.dart';
 import '../../data/models/txn.dart';
 import '../transaction/transaction_providers.dart';
@@ -181,7 +182,7 @@ class _CustomerTile extends StatelessWidget {
         children: [
           Text(Money.format(summary.advancePaise, decimals: false),
               style: const TextStyle(
-                  color: Colors.green, fontWeight: FontWeight.bold)),
+                  color: AppSemantics.income, fontWeight: FontWeight.bold)),
           const Text('advance', style: TextStyle(fontSize: 11)),
         ],
       ),

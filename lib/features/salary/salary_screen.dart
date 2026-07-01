@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/design.dart';
 import '../../core/money.dart';
 import '../../data/models/books.dart';
 import '../books/books_providers.dart';
@@ -220,7 +221,7 @@ class SalaryScreen extends ConsumerWidget {
               onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Cancel')),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(backgroundColor: AppSemantics.expense),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Remove'),
           ),
@@ -348,7 +349,7 @@ class SalaryScreen extends ConsumerWidget {
         ? 'Paid ${Money.format(cashPaise)} + ${Money.format(adjustNow)} advance adjusted ✓'
         : 'Paid ${Money.format(cashPaise)} to ${s.name} ✓';
     messenger.showSnackBar(SnackBar(
-      backgroundColor: Colors.green.shade700,
+      backgroundColor: AppSemantics.income,
       behavior: SnackBarBehavior.floating,
       content: Text(msg, style: const TextStyle(color: Colors.white)),
     ));
@@ -404,7 +405,7 @@ class SalaryScreen extends ConsumerWidget {
         );
     ref.invalidate(advancesProvider);
     messenger.showSnackBar(SnackBar(
-      backgroundColor: Colors.green.shade700,
+      backgroundColor: AppSemantics.income,
       behavior: SnackBarBehavior.floating,
       content: Text('Advance ${Money.format(amountPaise)} to ${s.name} ✓',
           style: const TextStyle(color: Colors.white)),
@@ -526,13 +527,13 @@ class _StaffCard extends StatelessWidget {
             Row(
               children: [
                 _stat(context, 'Paid (month)',
-                    Money.format(paid, decimals: false), Colors.green),
+                    Money.format(paid, decimals: false), AppSemantics.income),
                 _stat(context, 'Advance',
                     Money.format(outstanding, decimals: false),
-                    outstanding > 0 ? Colors.red : Colors.green),
+                    outstanding > 0 ? AppSemantics.expense : AppSemantics.income),
                 _stat(context, 'To pay',
                     Money.format(netToPay, decimals: false),
-                    netToPay > 0 ? Colors.orange : Colors.green),
+                    netToPay > 0 ? AppSemantics.warning : AppSemantics.income),
               ],
             ),
             if (advanceHistory.isNotEmpty) ...[
@@ -559,8 +560,8 @@ class _StaffCard extends StatelessWidget {
                                   : Icons.radio_button_unchecked,
                               size: 16,
                               color: a.status == 'closed'
-                                  ? Colors.green
-                                  : Colors.orange,
+                                  ? AppSemantics.income
+                                  : AppSemantics.warning,
                             ),
                             const SizedBox(width: 8),
                             Expanded(

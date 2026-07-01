@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/design.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_lock.dart';
@@ -130,9 +131,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
                 const Divider(),
                 ListTile(
-                  leading: const Icon(Icons.logout, color: Colors.red),
+                  leading: const Icon(Icons.logout, color: AppSemantics.expense),
                   title: const Text('Sign out',
-                      style: TextStyle(color: Colors.red)),
+                      style: TextStyle(color: AppSemantics.expense)),
                   onTap: _signOut,
                 ),
                 const AboutListTile(

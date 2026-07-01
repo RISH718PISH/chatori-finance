@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/design.dart';
 import '../../core/money.dart';
 import '../../data/models/txn.dart';
 import '../transaction/transaction_providers.dart';
@@ -43,25 +44,25 @@ class HomeScreen extends ConsumerWidget {
           Row(
             children: [
               _SummaryCard(
-                label: 'Income',
+                label: 'Income today',
                 value: Money.format(totals.incomePaise, decimals: false),
-                color: Colors.green,
+                color: AppSemantics.income,
               ),
               const SizedBox(width: 12),
               _SummaryCard(
-                label: 'Expenses',
+                label: 'Expenses today',
                 value: Money.format(totals.expensePaise, decimals: false),
-                color: Colors.red,
+                color: AppSemantics.expense,
               ),
             ],
           ),
           const SizedBox(height: 12),
           _SummaryCard(
-            label: 'Net (today)',
+            label: 'Net today',
             value: Money.format(totals.netPaise, decimals: false),
             color: totals.netPaise >= 0
-                ? Theme.of(context).colorScheme.primary
-                : Theme.of(context).colorScheme.error,
+                ? AppSemantics.income
+                : AppSemantics.expense,
             wide: true,
           ),
           const SizedBox(height: 20),
@@ -73,7 +74,8 @@ class HomeScreen extends ConsumerWidget {
             children: [
               Expanded(
                 child: FilledButton.icon(
-                  style: FilledButton.styleFrom(backgroundColor: Colors.green),
+                  style: FilledButton.styleFrom(
+                      backgroundColor: AppSemantics.income),
                   onPressed: () => context.push('/add?type=income'),
                   icon: const Icon(Icons.add),
                   label: const Text('Income'),
@@ -83,8 +85,7 @@ class HomeScreen extends ConsumerWidget {
               Expanded(
                 child: FilledButton.icon(
                   style: FilledButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.error,
-                  ),
+                      backgroundColor: AppSemantics.expense),
                   onPressed: () => context.push('/add?type=expense'),
                   icon: const Icon(Icons.remove),
                   label: const Text('Expense'),
@@ -175,15 +176,9 @@ class _SummaryCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: Theme.of(context).textTheme.labelLarge),
-            const SizedBox(height: 6),
-            Text(
-              value,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: color,
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
+            LabelUpper(label),
+            const SizedBox(height: 8),
+            DataNumber(value, size: DataSize.lg, color: color),
           ],
         ),
       ),
@@ -228,7 +223,7 @@ class _TxnTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isIncome = txn.type == 'income';
-    final color = isIncome ? Colors.green : Colors.red;
+    final color = isIncome ? AppSemantics.income : AppSemantics.expense;
     final subtitle = [
       txn.paymentMode,
       if (txn.partyName != null && txn.partyName!.isNotEmpty) txn.partyName,
@@ -244,9 +239,10 @@ class _TxnTile extends StatelessWidget {
       ),
       title: Text(txn.category),
       subtitle: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
-      trailing: Text(
+      trailing: DataNumber(
         '${isIncome ? '+' : '−'}${Money.format(txn.amountPaise)}',
-        style: TextStyle(color: color, fontWeight: FontWeight.bold),
+        size: DataSize.sm,
+        color: color,
       ),
     );
   }
@@ -261,10 +257,10 @@ class _CustomerAdvancesSection extends StatelessWidget {
     final total = advances.fold<int>(0, (s, t) => s + t.amountPaise);
     final show = advances.take(4).toList();
     return Card(
-      color: Colors.green.withValues(alpha: 0.08),
+      color: AppSemantics.income.withValues(alpha: 0.06),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: Colors.green.withValues(alpha: 0.4)),
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: AppSemantics.income.withValues(alpha: 0.35)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -273,14 +269,13 @@ class _CustomerAdvancesSection extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.savings, color: Colors.green),
+                const Icon(Icons.savings, color: AppSemantics.income),
                 const SizedBox(width: 8),
                 Expanded(
-                    child: Text('Customer advances',
-                        style: Theme.of(context).textTheme.titleMedium)),
-                Text(Money.format(total, decimals: false),
-                    style: const TextStyle(
-                        color: Colors.green, fontWeight: FontWeight.bold)),
+                    child: LabelUpper('Customer advances',
+                        color: AppSemantics.income)),
+                DataNumber(Money.format(total, decimals: false),
+                    size: DataSize.md, color: AppSemantics.income),
               ],
             ),
             const SizedBox(height: 8),
@@ -305,9 +300,8 @@ class _CustomerAdvancesSection extends StatelessWidget {
                     Text(DateFormat('d MMM').format(t.occurredAt),
                         style: Theme.of(context).textTheme.bodySmall),
                     const SizedBox(width: 12),
-                    Text(Money.format(t.amountPaise),
-                        style: const TextStyle(
-                            color: Colors.green, fontWeight: FontWeight.w600)),
+                    DataNumber(Money.format(t.amountPaise),
+                        size: DataSize.sm, color: AppSemantics.income),
                   ],
                 ),
               ),

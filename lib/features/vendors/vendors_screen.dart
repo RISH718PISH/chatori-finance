@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/design.dart';
 import '../../core/money.dart';
 import '../../data/models/txn.dart';
 import '../transaction/transaction_providers.dart';
@@ -121,7 +122,7 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                             final v = list[i];
                             return ListTile(
                               leading: CircleAvatar(
-                                  backgroundColor: Colors.red.withValues(alpha: 0.15),
+                                  backgroundColor: AppSemantics.expense.withValues(alpha: 0.15),
                                   child: Text(v.name.isNotEmpty
                                       ? v.name[0].toUpperCase()
                                       : '?')),
@@ -130,7 +131,7 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                                   '${v.count} bills · last ${DateFormat('d MMM').format(v.lastAt)}'),
                               trailing: Text(Money.format(v.paidPaise, decimals: false),
                                   style: const TextStyle(
-                                      color: Colors.red, fontWeight: FontWeight.bold)),
+                                      color: AppSemantics.expense, fontWeight: FontWeight.bold)),
                               onTap: () => context.push('/transactions'),
                             );
                           },

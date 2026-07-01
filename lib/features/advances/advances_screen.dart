@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/design.dart';
 import '../../core/money.dart';
 import '../../data/models/books.dart';
 import '../books/books_providers.dart';
@@ -55,7 +56,7 @@ class AdvancesScreen extends ConsumerWidget {
                     const Text('Total outstanding'),
                     Text(Money.format(outstanding),
                         style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.bold, color: Colors.orange)),
+                            fontWeight: FontWeight.bold, color: AppSemantics.warning)),
                   ],
                 ),
               ),
@@ -193,8 +194,8 @@ class _AdvanceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final closed = advance.status == 'closed';
     final statusColor = closed
-        ? Colors.green
-        : (advance.status == 'partial' ? Colors.orange : Colors.red);
+        ? AppSemantics.income
+        : (advance.status == 'partial' ? AppSemantics.warning : AppSemantics.expense);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/design.dart';
 import '../../core/money.dart';
 import '../../data/models/books.dart';
 import '../../data/models/txn.dart';
@@ -133,14 +134,14 @@ class _Report extends StatelessWidget {
       children: [
         Row(
           children: [
-            _card(context, 'Income', income, Colors.green),
+            _card(context, 'Income', income, AppSemantics.income),
             const SizedBox(width: 12),
-            _card(context, 'Expenses', expense, Colors.red),
+            _card(context, 'Expenses', expense, AppSemantics.expense),
           ],
         ),
         const SizedBox(height: 12),
         _card(context, 'Net profit / loss', net,
-            net >= 0 ? Colors.green : Colors.red,
+            net >= 0 ? AppSemantics.income : AppSemantics.expense,
             wide: true),
         const SizedBox(height: 12),
         Row(
@@ -148,7 +149,7 @@ class _Report extends StatelessWidget {
             _card(context, 'Salary paid', salaryPaid, Colors.blue),
             const SizedBox(width: 12),
             _card(context, 'Advance outstanding', advanceOutstanding,
-                Colors.orange),
+                AppSemantics.warning),
           ],
         ),
         const SizedBox(height: 24),
@@ -159,7 +160,7 @@ class _Report extends StatelessWidget {
         ],
         if (incomeByCat.isNotEmpty) ...[
           _heading(context, 'Income breakdown'),
-          _BarList(buckets: incomeByCat, total: income, color: Colors.green),
+          _BarList(buckets: incomeByCat, total: income, color: AppSemantics.income),
           const SizedBox(height: 24),
         ],
         _heading(context, 'Cash vs Digital (expenses)'),

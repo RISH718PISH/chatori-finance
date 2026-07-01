@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/categories.dart';
 import '../../core/category_icons.dart';
+import '../../core/design.dart';
 import '../../core/money.dart';
 import '../../data/models/txn.dart';
 import 'transaction_providers.dart';
@@ -231,7 +232,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
         ..showSnackBar(
           SnackBar(
             behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.green.shade700,
+            backgroundColor: AppSemantics.income,
             duration: const Duration(seconds: 2),
             content: Row(
               children: [
@@ -259,8 +260,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final accent = _isIncome ? Colors.green : scheme.error;
+    final accent = _isIncome ? AppSemantics.income : AppSemantics.expense;
 
     return Scaffold(
       appBar: AppBar(
@@ -300,13 +300,8 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                 ),
                 const SizedBox(height: 16),
                 Center(
-                  child: Text(
-                    Money.format(_amountPaise),
-                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                          color: accent,
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
+                  child: DataNumber(Money.format(_amountPaise),
+                      size: DataSize.lg, color: accent),
                 ),
                 const SizedBox(height: 16),
                 _SectionLabel(_isIncome ? 'Sale type' : 'Category'),

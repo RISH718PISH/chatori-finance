@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/design.dart';
 import '../../core/money.dart';
 import '../../data/models/txn.dart';
 import 'transaction_providers.dart';
@@ -111,10 +112,10 @@ class _TransactionsListScreenState
                     () => setState(() => _typeFilter = 'all')),
                 _chip('Income', _typeFilter == 'income',
                     () => setState(() => _typeFilter = 'income'),
-                    color: Colors.green),
+                    color: AppSemantics.income),
                 _chip('Expense', _typeFilter == 'expense',
                     () => setState(() => _typeFilter = 'expense'),
-                    color: Colors.red),
+                    color: AppSemantics.expense),
                 const SizedBox(width: 8),
                 _chip(
                     _dateRange == null
@@ -181,7 +182,7 @@ class _Tile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isIncome = txn.isIncome;
-    final color = isIncome ? Colors.green : Colors.red;
+    final color = isIncome ? AppSemantics.income : AppSemantics.expense;
     final subtitle = [
       txn.paymentMode,
       if ((txn.partyName ?? '').isNotEmpty) txn.partyName,

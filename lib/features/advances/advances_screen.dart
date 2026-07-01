@@ -142,6 +142,7 @@ class AdvancesScreen extends ConsumerWidget {
           amountPaise: amountPaise,
           reason: reasonCtl.text.trim().isEmpty ? null : reasonCtl.text.trim(),
         );
+    ref.invalidate(advancesProvider);
   }
 
   Future<void> _recover(BuildContext context, WidgetRef ref, Advance a) async {
@@ -178,6 +179,7 @@ class AdvancesScreen extends ConsumerWidget {
           totalAmountPaise: a.amountPaise,
           newRecoveredPaise: a.recoveredPaise + recoverPaise,
         );
+    ref.invalidate(advancesProvider);
   }
 }
 

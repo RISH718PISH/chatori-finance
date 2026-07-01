@@ -8,33 +8,32 @@ final booksRepoProvider = Provider<BooksRepository>(
   (ref) => BooksRepository(ref.watch(supabaseClientProvider)),
 );
 
-final staffProvider = StreamProvider.autoDispose<List<Staff>>((ref) async* {
+// Cached one-shot fetches. Refreshed explicitly (ref.invalidate) after any
+// mutation and via pull-to-refresh — reliable, no realtime-channel flicker.
+final staffProvider = FutureProvider<List<Staff>>((ref) async {
   final biz = await ref.watch(businessIdProvider.future);
-  if (biz == null) {
-    yield const [];
-    return;
-  }
-  yield* ref.watch(booksRepoProvider).watchStaff(biz);
+  if (biz == null) return const [];
+  return ref.watch(booksRepoProvider).fetchStaff(biz);
 });
 
-final salaryProvider =
-    StreamProvider.autoDispose<List<SalaryRecord>>((ref) async* {
+final salaryProvider = FutureProvider<List<SalaryRecord>>((ref) async {
   final biz = await ref.watch(businessIdProvider.future);
-  if (biz == null) {
-    yield const [];
-    return;
-  }
-  yield* ref.watch(booksRepoProvider).watchSalary(biz);
+  if (biz == null) return const [];
+  return ref.watch(booksRepoProvider).fetchSalary(biz);
 });
 
-final advancesProvider = StreamProvider.autoDispose<List<Advance>>((ref) async* {
+final advancesProvider = FutureProvider<List<Advance>>((ref) async {
   final biz = await ref.watch(businessIdProvider.future);
-  if (biz == null) {
-    yield const [];
-    return;
-  }
-  yield* ref.watch(booksRepoProvider).watchAdvances(biz);
+  if (biz == null) return const [];
+  return ref.watch(booksRepoProvider).fetchAdvances(biz);
 });
+
+/// Refreshes staff, salary and advances together.
+void refreshBooks(WidgetRef ref) {
+  ref.invalidate(staffProvider);
+  ref.invalidate(salaryProvider);
+  ref.invalidate(advancesProvider);
+}
 
 /// Current month key, e.g. "2026-07".
 String currentMonthKey() {

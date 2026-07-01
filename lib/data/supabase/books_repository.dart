@@ -9,13 +9,13 @@ class BooksRepository {
   final SupabaseClient _client;
 
   // ── Staff ──────────────────────────────────────────────────────────
-  Stream<List<Staff>> watchStaff(String businessId) {
-    return _client
+  Future<List<Staff>> fetchStaff(String businessId) async {
+    final rows = await _client
         .from('staff')
-        .stream(primaryKey: ['id'])
+        .select()
         .eq('business_id', businessId)
-        .order('name')
-        .map((rows) => rows.map(Staff.fromJson).toList());
+        .order('name');
+    return rows.map(Staff.fromJson).toList();
   }
 
   Future<void> addStaff({
@@ -33,13 +33,12 @@ class BooksRepository {
   }
 
   // ── Salary payments ────────────────────────────────────────────────
-  Stream<List<SalaryRecord>> watchSalary(String businessId) {
-    return _client
+  Future<List<SalaryRecord>> fetchSalary(String businessId) async {
+    final rows = await _client
         .from('salary_records')
-        .stream(primaryKey: ['id'])
-        .eq('business_id', businessId)
-        .order('payment_date')
-        .map((rows) => rows.map(SalaryRecord.fromJson).toList());
+        .select()
+        .eq('business_id', businessId);
+    return rows.map(SalaryRecord.fromJson).toList();
   }
 
   Future<void> paySalary({
@@ -64,17 +63,13 @@ class BooksRepository {
   }
 
   // ── Advances ───────────────────────────────────────────────────────
-  Stream<List<Advance>> watchAdvances(String businessId) {
-    return _client
+  Future<List<Advance>> fetchAdvances(String businessId) async {
+    final rows = await _client
         .from('advance_records')
-        .stream(primaryKey: ['id'])
+        .select()
         .eq('business_id', businessId)
-        .order('date')
-        .map((rows) {
-          final list = rows.map(Advance.fromJson).toList();
-          list.sort((a, b) => b.date.compareTo(a.date));
-          return list;
-        });
+        .order('date', ascending: false);
+    return rows.map(Advance.fromJson).toList();
   }
 
   Future<void> addAdvance({

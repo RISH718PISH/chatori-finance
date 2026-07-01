@@ -21,9 +21,10 @@ final authChangeProvider = StreamProvider<AuthState>(
   (ref) => ref.watch(authRepoProvider).onAuthChange,
 );
 
-/// The current user's business id.
+/// The current user's business id. Cached for the session — it does not depend
+/// on auth *ticks* (token refreshes), which previously caused every dependent
+/// stream to re-subscribe and flicker. It's invalidated on sign-out.
 final businessIdProvider = FutureProvider<String?>((ref) {
-  ref.watch(authChangeProvider);
   return ref.watch(authRepoProvider).currentBusinessId();
 });
 

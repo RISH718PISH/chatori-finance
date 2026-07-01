@@ -72,6 +72,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _signOut() async {
     await ref.read(authRepoProvider).signOut();
+    ref.invalidate(businessIdProvider);
     if (mounted) Navigator.of(context).maybePop();
   }
 

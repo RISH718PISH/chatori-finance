@@ -56,8 +56,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "1.5"
+          name: "1.6"
           body: |
-            Chatori Finance **1.5** — Reports, Paytm OCR reader, and advance-deduction in salary.
+            Chatori Finance **1.6** — fixes the flickering/error in Salary advances (reliable data loading).
             Download **app-release.apk** below and install it on your phone.
           files: build/app/outputs/flutter-apk/app-release.apk

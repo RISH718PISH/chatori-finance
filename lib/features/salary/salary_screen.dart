@@ -35,8 +35,14 @@ class SalaryScreen extends ConsumerWidget {
                 icon: Icons.badge_outlined,
                 text: 'No staff yet.\nTap "Add staff" to begin.');
           }
-          return ListView(
+          return RefreshIndicator(
+            onRefresh: () async {
+              refreshBooks(ref);
+              await ref.read(staffProvider.future);
+            },
+            child: ListView(
             padding: const EdgeInsets.all(12),
+            physics: const AlwaysScrollableScrollPhysics(),
             children: [
               for (final s in staff)
                 Builder(builder: (_) {
@@ -63,6 +69,7 @@ class SalaryScreen extends ConsumerWidget {
                   );
                 }),
             ],
+          ),
           );
         },
       ),
@@ -124,6 +131,7 @@ class SalaryScreen extends ConsumerWidget {
           role: roleCtl.text.trim().isEmpty ? null : roleCtl.text.trim(),
           monthlySalaryPaise: salaryPaise,
         );
+    ref.invalidate(staffProvider);
   }
 
   Future<void> _paySalary(BuildContext context, WidgetRef ref, Staff s, int paid,
@@ -219,6 +227,9 @@ class SalaryScreen extends ConsumerWidget {
       }
     }
 
+    ref.invalidate(salaryProvider);
+    ref.invalidate(advancesProvider);
+
     final msg = adjustNow > 0
         ? 'Paid ${Money.format(cashPaise)} + ${Money.format(adjustNow)} advance adjusted ✓'
         : 'Paid ${Money.format(cashPaise)} to ${s.name} ✓';
@@ -272,6 +283,7 @@ class SalaryScreen extends ConsumerWidget {
           reason: reasonCtl.text.trim().isEmpty ? null : reasonCtl.text.trim(),
           linkedStaffId: s.id,
         );
+    ref.invalidate(advancesProvider);
     messenger.showSnackBar(SnackBar(
       backgroundColor: Colors.green.shade700,
       behavior: SnackBarBehavior.floating,
@@ -325,6 +337,7 @@ class SalaryScreen extends ConsumerWidget {
       );
       remaining -= take;
     }
+    ref.invalidate(advancesProvider);
   }
 }
 

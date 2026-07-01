@@ -56,8 +56,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "1.7"
+          name: "1.8"
           body: |
-            Chatori Finance **1.7** — Customer advances on Home, date pickers + advance history in Salary, refresh fix.
+            Chatori Finance **1.8** — edit/delete entries, search & filter, Customer & Vendor ledgers, edit staff, duplicate warning.
             Download **app-release.apk** below and install it on your phone.
           files: build/app/outputs/flutter-apk/app-release.apk

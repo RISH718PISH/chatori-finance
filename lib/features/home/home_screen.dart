@@ -98,16 +98,18 @@ class HomeScreen extends ConsumerWidget {
           Text('Sections', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           GridView.count(
-            crossAxisCount: 2,
+            crossAxisCount: 3,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
-            childAspectRatio: 1.6,
+            childAspectRatio: 1.05,
             children: const [
               _NavTile('Salaries', Icons.badge_outlined, '/salary'),
               _NavTile('Advances', Icons.account_balance_wallet_outlined, '/advances'),
-              _NavTile('Import Paytm', Icons.image_outlined, '/import'),
+              _NavTile('Customers', Icons.people_alt_outlined, '/customers'),
+              _NavTile('Vendors', Icons.store_outlined, '/vendors'),
+              _NavTile('Paytm', Icons.image_outlined, '/import'),
               _NavTile('Reports', Icons.bar_chart_outlined, '/reports'),
             ],
           ),
@@ -120,7 +122,18 @@ class HomeScreen extends ConsumerWidget {
           ],
 
           // --- Recent entries ---
-          Text('Recent', style: Theme.of(context).textTheme.titleMedium),
+          Row(
+            children: [
+              Expanded(
+                child: Text('Recent',
+                    style: Theme.of(context).textTheme.titleMedium),
+              ),
+              TextButton(
+                onPressed: () => context.push('/transactions'),
+                child: const Text('View all'),
+              ),
+            ],
+          ),
           const SizedBox(height: 8),
           recent.when(
             loading: () => const Center(child: Padding(
@@ -223,6 +236,7 @@ class _TxnTile extends StatelessWidget {
     ].join(' · ');
 
     return ListTile(
+      onTap: () => context.push('/add', extra: txn),
       contentPadding: EdgeInsets.zero,
       leading: CircleAvatar(
         backgroundColor: color.withValues(alpha: 0.15),

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/categories.dart';
 import '../../core/category_icons.dart';
 import '../../core/money.dart';
+import '../../data/models/txn.dart';
 import 'transaction_providers.dart';
 
 /// Optional values to pre-fill the form (e.g. from a Paytm screenshot).
@@ -28,10 +29,12 @@ class AddTransactionScreen extends ConsumerStatefulWidget {
     super.key,
     this.initialType = 'expense',
     this.prefill,
+    this.editing,
   });
 
   final String initialType; // 'income' | 'expense'
   final AddPrefill? prefill;
+  final Txn? editing;
 
   @override
   ConsumerState<AddTransactionScreen> createState() =>
@@ -39,14 +42,31 @@ class AddTransactionScreen extends ConsumerStatefulWidget {
 }
 
 class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
-  late String _type = widget.initialType;
-  late final String _source =
-      (widget.prefill?.fromScreenshot ?? false) ? 'screenshot' : 'manual';
+  late String _type =
+      widget.editing?.type ?? widget.prefill?.type ?? widget.initialType;
+  late final String _source = widget.editing?.source ??
+      ((widget.prefill?.fromScreenshot ?? false) ? 'screenshot' : 'manual');
   int _amountPaise = 0;
+  bool get _isEdit => widget.editing != null;
 
   @override
   void initState() {
     super.initState();
+    final e = widget.editing;
+    if (e != null) {
+      _amountPaise = e.amountPaise;
+      _partyController.text = e.partyName ?? '';
+      _noteController.text = e.notes ?? '';
+      _paymentMode = e.paymentMode;
+      _tag = e.tag;
+      _date = e.occurredAt;
+      // Pre-select the category — resolved once `kSeedCategories` is available.
+      final match = kSeedCategories
+          .where((c) => c.kind == e.type && c.name == e.category)
+          .toList();
+      if (match.isNotEmpty) _category = match.first;
+      return;
+    }
     final p = widget.prefill;
     if (p != null) {
       if (p.amountPaise != null) _amountPaise = p.amountPaise!;
@@ -87,6 +107,39 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     });
   }
 
+  Future<void> _deleteEntry() async {
+    final e = widget.editing;
+    if (e == null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete entry?'),
+        content: Text(
+            'This will permanently delete ${Money.format(e.amountPaise)} ${e.category}.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    await ref.read(transactionRepoProvider).delete(e.id);
+    if (!mounted) return;
+    refreshTransactions(ref);
+    context.pop();
+    messenger.showSnackBar(const SnackBar(
+      behavior: SnackBarBehavior.floating,
+      content: Text('Entry deleted'),
+    ));
+  }
+
   Future<void> _save() async {
     if (!_canSave || _saving) return;
     setState(() => _saving = true);
@@ -99,26 +152,78 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
         );
         return;
       }
-      await ref.read(transactionRepoProvider).add(
-            businessId: biz,
-            type: _type,
-            category: _category!.name,
-            amountPaise: _amountPaise,
-            paymentMode: _paymentMode,
-            occurredAt: _date,
-            partyName: _partyController.text.trim().isEmpty
-                ? null
-                : _partyController.text.trim(),
-            notes: _noteController.text.trim().isEmpty
-                ? null
-                : _noteController.text.trim(),
-            tag: _tag,
-            source: _source,
-          );
+      final party = _partyController.text.trim().isEmpty
+          ? null
+          : _partyController.text.trim();
+      final notes = _noteController.text.trim().isEmpty
+          ? null
+          : _noteController.text.trim();
+      final repo = ref.read(transactionRepoProvider);
+
+      // Duplicate warning: same amount + party + day (skip on edit).
+      if (!_isEdit) {
+        final dups = await repo.findDuplicates(
+          businessId: biz,
+          amountPaise: _amountPaise,
+          partyName: party,
+          day: _date,
+        );
+        if (dups.isNotEmpty && mounted) {
+          final proceed = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Possible duplicate'),
+                  content: Text(
+                      'You already have an entry of ${Money.format(_amountPaise)}${party == null ? '' : ' for $party'} on ${_friendlyDate(_date)}. Save this one anyway?'),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Cancel')),
+                    FilledButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Save anyway')),
+                  ],
+                ),
+              ) ??
+              false;
+          if (!proceed) {
+            setState(() => _saving = false);
+            return;
+          }
+        }
+      }
+
+      if (_isEdit) {
+        await repo.update(
+          id: widget.editing!.id,
+          type: _type,
+          category: _category!.name,
+          amountPaise: _amountPaise,
+          paymentMode: _paymentMode,
+          occurredAt: _date,
+          partyName: party,
+          notes: notes,
+          tag: _tag,
+        );
+      } else {
+        await repo.add(
+          businessId: biz,
+          type: _type,
+          category: _category!.name,
+          amountPaise: _amountPaise,
+          paymentMode: _paymentMode,
+          occurredAt: _date,
+          partyName: party,
+          notes: notes,
+          tag: _tag,
+          source: _source,
+        );
+      }
       if (!mounted) return;
       refreshTransactions(ref);
       final amount = Money.format(_amountPaise);
       final label = _isIncome ? 'Income' : 'Expense';
+      final verb = _isEdit ? 'updated' : 'saved';
       final messenger = ScaffoldMessenger.of(context);
       context.pop();
       messenger
@@ -133,7 +238,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                 const Icon(Icons.check_circle, color: Colors.white),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text('$label of $amount saved ✓',
+                  child: Text('$label of $amount $verb ✓',
                       style: const TextStyle(
                           color: Colors.white, fontWeight: FontWeight.w600)),
                 ),
@@ -158,7 +263,19 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     final accent = _isIncome ? Colors.green : scheme.error;
 
     return Scaffold(
-      appBar: AppBar(title: Text(_isIncome ? 'Add Income' : 'Add Expense')),
+      appBar: AppBar(
+        title: Text(_isEdit
+            ? (_isIncome ? 'Edit Income' : 'Edit Expense')
+            : (_isIncome ? 'Add Income' : 'Add Expense')),
+        actions: [
+          if (_isEdit)
+            IconButton(
+              tooltip: 'Delete',
+              onPressed: _saving ? null : _deleteEntry,
+              icon: const Icon(Icons.delete_outline),
+            ),
+        ],
+      ),
       body: Column(
         children: [
           Expanded(

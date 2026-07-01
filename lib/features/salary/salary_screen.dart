@@ -73,6 +73,8 @@ class SalaryScreen extends ConsumerWidget {
                     onGiveAdvance: () => _giveAdvance(context, ref, s),
                     onRecover: () =>
                         _recoverAdvance(context, ref, s, openAdvances),
+                    onEdit: () => _editStaff(context, ref, s),
+                    onDelete: () => _deleteStaff(context, ref, s),
                   );
                 }),
             ],
@@ -139,6 +141,104 @@ class SalaryScreen extends ConsumerWidget {
           monthlySalaryPaise: salaryPaise,
         );
     ref.invalidate(staffProvider);
+  }
+
+  Future<void> _editStaff(BuildContext context, WidgetRef ref, Staff s) async {
+    final nameCtl = TextEditingController(text: s.name);
+    final roleCtl = TextEditingController(text: s.role ?? '');
+    var salaryPaise = s.monthlySalaryPaise;
+    var active = s.active;
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: const Text('Edit staff'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                    controller: nameCtl,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(labelText: 'Name')),
+                TextField(
+                    controller: roleCtl,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(labelText: 'Role')),
+                const SizedBox(height: 12),
+                AmountField(
+                  label: 'Monthly salary',
+                  initialPaise: s.monthlySalaryPaise,
+                  onChanged: (p) => salaryPaise = p,
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Active'),
+                  value: active,
+                  onChanged: (v) => setState(() => active = v),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Save')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true || nameCtl.text.trim().isEmpty) return;
+    await ref.read(booksRepoProvider).updateStaff(
+          id: s.id,
+          name: nameCtl.text.trim(),
+          role: roleCtl.text.trim().isEmpty ? null : roleCtl.text.trim(),
+          monthlySalaryPaise: salaryPaise,
+          active: active,
+        );
+    ref.invalidate(staffProvider);
+    messenger.showSnackBar(SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text('${nameCtl.text.trim()} updated')));
+  }
+
+  Future<void> _deleteStaff(BuildContext context, WidgetRef ref, Staff s) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Remove ${s.name}?'),
+        content: const Text(
+            'Their salary and advance history stays in your books; only the '
+            'staff record is removed. This can\'t be undone.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ref.read(booksRepoProvider).deleteStaff(s.id);
+      ref.invalidate(staffProvider);
+      messenger.showSnackBar(SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('${s.name} removed')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('Could not remove: $e')));
+    }
   }
 
   Future<void> _paySalary(BuildContext context, WidgetRef ref, Staff s, int paid,
@@ -370,6 +470,8 @@ class _StaffCard extends StatelessWidget {
     required this.onPay,
     required this.onGiveAdvance,
     required this.onRecover,
+    required this.onEdit,
+    required this.onDelete,
   });
 
   final Staff staff;
@@ -380,6 +482,8 @@ class _StaffCard extends StatelessWidget {
   final VoidCallback onPay;
   final VoidCallback onGiveAdvance;
   final VoidCallback onRecover;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -405,6 +509,16 @@ class _StaffCard extends StatelessWidget {
                           style: Theme.of(context).textTheme.bodySmall),
                     ],
                   ),
+                ),
+                PopupMenuButton<String>(
+                  onSelected: (v) {
+                    if (v == 'edit') onEdit();
+                    if (v == 'delete') onDelete();
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'edit', child: Text('Edit')),
+                    PopupMenuItem(value: 'delete', child: Text('Remove')),
+                  ],
                 ),
               ],
             ),

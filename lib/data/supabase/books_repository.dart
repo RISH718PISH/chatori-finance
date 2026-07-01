@@ -32,6 +32,25 @@ class BooksRepository {
     });
   }
 
+  Future<void> updateStaff({
+    required String id,
+    required String name,
+    String? role,
+    required int monthlySalaryPaise,
+    bool? active,
+  }) async {
+    await _client.from('staff').update({
+      'name': name,
+      'role': role,
+      'monthly_salary_paise': monthlySalaryPaise,
+      'active_status': ?active,
+    }).eq('id', id);
+  }
+
+  Future<void> deleteStaff(String id) async {
+    await _client.from('staff').delete().eq('id', id);
+  }
+
   // ── Salary payments ────────────────────────────────────────────────
   Future<List<SalaryRecord>> fetchSalary(String businessId) async {
     final rows = await _client

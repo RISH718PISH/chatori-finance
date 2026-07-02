@@ -18,11 +18,18 @@ const _pieColors = [
   Color(0xFF4E342E), Color(0xFF37474F), Color(0xFFF9A825), Color(0xFF283593),
 ];
 
-class ReportsScreen extends ConsumerWidget {
+class ReportsScreen extends ConsumerStatefulWidget {
   const ReportsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ReportsScreen> createState() => _ReportsScreenState();
+}
+
+class _ReportsScreenState extends ConsumerState<ReportsScreen> {
+  String _view = 'overview'; // overview | pl
+
+  @override
+  Widget build(BuildContext context) {
     final month = ref.watch(selectedReportMonthProvider);
     final txnsAsync = ref.watch(monthTxnsProvider);
     final salary = ref.watch(salaryProvider).asData?.value ?? const <SalaryRecord>[];
@@ -61,16 +68,206 @@ class ReportsScreen extends ConsumerWidget {
             onPrev: () => ref.read(selectedReportMonthProvider.notifier).prev(),
             onNext: () => ref.read(selectedReportMonthProvider.notifier).next(),
           ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'overview', label: Text('Overview')),
+                ButtonSegment(value: 'pl', label: Text('P&L')),
+              ],
+              selected: {_view},
+              onSelectionChanged: (s) => setState(() => _view = s.first),
+            ),
+          ),
           Expanded(
             child: txnsAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('Error: $e')),
-              data: (txns) => _Report(
-                txns: txns,
-                salaryPaid: salaryPaid,
-                advanceOutstanding: advanceOutstanding,
+              data: (txns) => _view == 'pl'
+                  ? _PlView(txns: txns)
+                  : _Report(
+                      txns: txns,
+                      salaryPaid: salaryPaid,
+                      advanceOutstanding: advanceOutstanding,
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Structured monthly P&L: Revenue → COGS → Gross profit → Operating → Net.
+class _PlView extends ConsumerWidget {
+  const _PlView({required this.txns});
+  final List<Txn> txns;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pl = MonthlyPl.fromTxns(txns);
+    final prevAsync = ref.watch(prevMonthTxnsProvider);
+    final prev = prevAsync.asData?.value == null
+        ? null
+        : MonthlyPl.fromTxns(prevAsync.asData!.value);
+
+    if (txns.isEmpty) {
+      return const Center(child: Text('No entries for this month.'));
+    }
+
+    final foodCostHigh = pl.foodCostPct > 40;
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _plSection(context, 'Revenue', pl.revenue, AppSemantics.income),
+        _plTotal(context, 'Total Revenue', pl.totalRevenue,
+            color: AppSemantics.income),
+        const Divider(height: 32),
+        _plSection(context, 'Cost of goods sold', pl.cogs,
+            AppSemantics.expense),
+        _plTotal(context, 'Total COGS', pl.totalCogs,
+            color: AppSemantics.expense),
+        const SizedBox(height: 12),
+        _plTotal(
+          context,
+          'Gross profit',
+          pl.grossProfit,
+          suffix: pl.totalRevenue > 0
+              ? '  (${pl.grossMarginPct.toStringAsFixed(1)}%)'
+              : null,
+          color:
+              pl.grossProfit >= 0 ? AppSemantics.income : AppSemantics.expense,
+          emphasized: true,
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Row(
+            children: [
+              Text('Food cost', style: Theme.of(context).textTheme.bodySmall),
+              const Spacer(),
+              Text(
+                '${pl.foodCostPct.toStringAsFixed(1)}%',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: foodCostHigh
+                      ? AppSemantics.warning
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              if (foodCostHigh)
+                const Padding(
+                  padding: EdgeInsets.only(left: 6),
+                  child: Icon(Icons.warning_amber,
+                      size: 16, color: AppSemantics.warning),
+                ),
+            ],
+          ),
+        ),
+        const Divider(height: 32),
+        _plSection(context, 'Operating expenses', pl.operating,
+            AppSemantics.expense),
+        _plTotal(context, 'Total Operating', pl.totalOperating,
+            color: AppSemantics.expense),
+        const Divider(height: 32),
+        _plTotal(
+          context,
+          'NET PROFIT',
+          pl.netProfit,
+          suffix: pl.totalRevenue > 0
+              ? '  (${pl.netMarginPct.toStringAsFixed(1)}%)'
+              : null,
+          color:
+              pl.netProfit >= 0 ? AppSemantics.income : AppSemantics.expense,
+          emphasized: true,
+        ),
+        if (prev != null) ...[
+          const SizedBox(height: 24),
+          LabelUpper('vs previous month'),
+          const SizedBox(height: 8),
+          _momRow(context, 'Revenue', pl.totalRevenue, prev.totalRevenue,
+              upIsGood: true),
+          _momRow(context, 'COGS', pl.totalCogs, prev.totalCogs,
+              upIsGood: false),
+          _momRow(context, 'Net', pl.netProfit, prev.netProfit,
+              upIsGood: true),
+        ],
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Widget _plSection(
+      BuildContext context, String title, List<Bucket> rows, Color color) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        LabelUpper(title),
+        const SizedBox(height: 8),
+        if (rows.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child:
+                Text('None', style: Theme.of(context).textTheme.bodySmall),
+          )
+        else
+          for (final b in rows)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(
+                children: [
+                  Expanded(child: Text(b.label)),
+                  DataNumber(Money.format(b.paise, decimals: false),
+                      size: DataSize.sm),
+                ],
               ),
             ),
+      ],
+    );
+  }
+
+  Widget _plTotal(BuildContext context, String label, int paise,
+      {String? suffix, Color? color, bool emphasized = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label,
+                style: TextStyle(
+                    fontWeight:
+                        emphasized ? FontWeight.w700 : FontWeight.w600)),
+          ),
+          DataNumber(
+            '${Money.format(paise, decimals: false)}${suffix ?? ''}',
+            size: emphasized ? DataSize.md : DataSize.sm,
+            color: color,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _momRow(
+      BuildContext context, String label, int current, int previous,
+      {required bool upIsGood}) {
+    final delta = current - previous;
+    final up = delta >= 0;
+    final good = up == upIsGood;
+    final color = delta == 0
+        ? Theme.of(context).colorScheme.onSurfaceVariant
+        : (good ? AppSemantics.income : AppSemantics.expense);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Expanded(child: Text(label)),
+          Icon(up ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+              color: color, size: 20),
+          DataNumber(
+            Money.format(delta.abs(), decimals: false),
+            size: DataSize.sm,
+            color: color,
           ),
         ],
       ),
@@ -362,6 +559,25 @@ void _showShareSheet({
               );
               await SharePlus.instance.share(
                 ShareParams(text: text, subject: 'Chatori Finance — $monthLabel'),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.receipt_long_outlined),
+            title: const Text('Share P&L statement'),
+            subtitle: const Text('Revenue → COGS → Net, as plain text'),
+            enabled: txns.isNotEmpty,
+            onTap: () async {
+              Navigator.pop(ctx);
+              final pl = MonthlyPl.fromTxns(txns);
+              final text = ReportExporter.buildPlText(
+                month: month,
+                revenue: pl.revenue,
+                cogs: pl.cogs,
+                operating: pl.operating,
+              );
+              await SharePlus.instance.share(
+                ShareParams(text: text, subject: 'P&L — $monthLabel'),
               );
             },
           ),

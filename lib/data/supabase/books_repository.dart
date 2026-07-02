@@ -81,6 +81,12 @@ class BooksRepository {
     });
   }
 
+  /// Removes a salary payment (undo). Note: any advance deduction that was
+  /// part of the payment is NOT automatically re-opened on the advance.
+  Future<void> deleteSalaryRecord(String id) async {
+    await _client.from('salary_records').delete().eq('id', id);
+  }
+
   // ── Advances ───────────────────────────────────────────────────────
   Future<List<Advance>> fetchAdvances(String businessId) async {
     final rows = await _client

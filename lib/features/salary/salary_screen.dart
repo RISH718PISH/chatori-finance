@@ -61,6 +61,10 @@ class SalaryScreen extends ConsumerWidget {
                       .where((a) => a.linkedStaffId == s.id)
                       .toList()
                     ..sort((a, b) => b.date.compareTo(a.date));
+                  final payments = salary
+                      .where((r) => r.staffId == s.id)
+                      .toList()
+                    ..sort((a, b) => b.paymentDate.compareTo(a.paymentDate));
                   return _StaffCard(
                     staff: s,
                     paid: paid,
@@ -68,6 +72,8 @@ class SalaryScreen extends ConsumerWidget {
                     netToPay: _netToPay(s.monthlySalaryPaise, paid, adjusted,
                         outstanding),
                     advanceHistory: allAdvances,
+                    salaryHistory: payments,
+                    onDeletePayment: (r) => _deletePayment(context, ref, s, r),
                     onPay: () => _paySalary(
                         context, ref, s, paid, adjusted, outstanding,
                         openAdvances),
@@ -240,6 +246,37 @@ class SalaryScreen extends ConsumerWidget {
           behavior: SnackBarBehavior.floating,
           content: Text('Could not remove: $e')));
     }
+  }
+
+  Future<void> _deletePayment(
+      BuildContext context, WidgetRef ref, Staff s, SalaryRecord r) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Undo this payment?'),
+        content: Text(
+            'Removes the ${Money.format(r.amountPaidPaise)} payment to ${s.name} '
+            '(${r.month}). "Paid" and "To pay" update immediately.'
+            '${r.advanceAdjustedPaise > 0 ? '\n\nNote: the ${Money.format(r.advanceAdjustedPaise)} advance deduction in this payment is NOT re-opened automatically — adjust it in Advances if needed.' : ''}'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Undo payment'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await ref.read(booksRepoProvider).deleteSalaryRecord(r.id);
+    ref.invalidate(salaryProvider);
+    messenger.showSnackBar(SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text('Payment to ${s.name} removed')));
   }
 
   Future<void> _paySalary(BuildContext context, WidgetRef ref, Staff s, int paid,
@@ -468,6 +505,8 @@ class _StaffCard extends StatelessWidget {
     required this.outstanding,
     required this.netToPay,
     required this.advanceHistory,
+    required this.salaryHistory,
+    required this.onDeletePayment,
     required this.onPay,
     required this.onGiveAdvance,
     required this.onRecover,
@@ -480,6 +519,8 @@ class _StaffCard extends StatelessWidget {
   final int outstanding;
   final int netToPay;
   final List<Advance> advanceHistory;
+  final List<SalaryRecord> salaryHistory;
+  final ValueChanged<SalaryRecord> onDeletePayment;
   final VoidCallback onPay;
   final VoidCallback onGiveAdvance;
   final VoidCallback onRecover;
@@ -536,6 +577,57 @@ class _StaffCard extends StatelessWidget {
                     netToPay > 0 ? AppSemantics.warning : AppSemantics.income),
               ],
             ),
+            if (salaryHistory.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Theme(
+                data: Theme.of(context)
+                    .copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  childrenPadding: EdgeInsets.zero,
+                  dense: true,
+                  leading: const Icon(Icons.receipt_long_outlined, size: 20),
+                  title: Text('Payment history (${salaryHistory.length})',
+                      style: Theme.of(context).textTheme.bodyMedium),
+                  children: [
+                    for (final r in salaryHistory.take(6))
+                      Row(
+                        children: [
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              '${DateFormat('d MMM yyyy').format(r.paymentDate)} · ${r.month}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ),
+                          Text(
+                            Money.format(r.amountPaidPaise, decimals: false),
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          if (r.advanceAdjustedPaise > 0)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 6),
+                              child: Text(
+                                '(+${Money.format(r.advanceAdjustedPaise, decimals: false)} adv)',
+                                style: const TextStyle(
+                                    fontSize: 11, color: Colors.grey),
+                              ),
+                            ),
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            tooltip: 'Undo payment',
+                            icon: const Icon(Icons.delete_outline, size: 18),
+                            onPressed: () => onDeletePayment(r),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+            ],
             if (advanceHistory.isNotEmpty) ...[
               const SizedBox(height: 4),
               Theme(

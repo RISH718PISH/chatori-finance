@@ -19,6 +19,7 @@ class TransactionRepository {
     String? notes,
     String? tag,
     String source = 'manual',
+    String? eventId,
   }) async {
     await _client.from('transactions').insert({
       'business_id': businessId,
@@ -31,6 +32,7 @@ class TransactionRepository {
       'notes': notes,
       'tag': tag,
       'source': source,
+      'event_id': eventId,
       'created_by': _client.auth.currentUser?.id,
     });
   }
@@ -45,6 +47,7 @@ class TransactionRepository {
     String? partyName,
     String? notes,
     String? tag,
+    String? eventId,
   }) async {
     await _client.from('transactions').update({
       'type': type,
@@ -55,6 +58,7 @@ class TransactionRepository {
       'party_name': partyName,
       'notes': notes,
       'tag': tag,
+      'event_id': eventId,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', id);
   }

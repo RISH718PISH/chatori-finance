@@ -106,6 +106,7 @@ class HomeScreen extends ConsumerWidget {
             crossAxisSpacing: 12,
             childAspectRatio: 1.05,
             children: const [
+              _NavTile('Events', Icons.celebration_outlined, '/events'),
               _NavTile('Salaries', Icons.badge_outlined, '/salary'),
               _NavTile('Advances', Icons.account_balance_wallet_outlined, '/advances'),
               _NavTile('Customers', Icons.people_alt_outlined, '/customers'),

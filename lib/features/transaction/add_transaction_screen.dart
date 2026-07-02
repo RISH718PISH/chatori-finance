@@ -1,26 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/categories.dart';
 import '../../core/category_icons.dart';
 import '../../core/design.dart';
 import '../../core/money.dart';
+import '../../data/models/event.dart';
 import '../../data/models/txn.dart';
+import '../events/events_providers.dart';
 import 'transaction_providers.dart';
 
-/// Optional values to pre-fill the form (e.g. from a Paytm screenshot).
+/// Optional values to pre-fill the form (e.g. from a Paytm/Hyperpure scan).
 class AddPrefill {
   final String? type;
   final int? amountPaise;
   final String? party;
   final String? notes;
+  final String? category;
+  final String? paymentMode;
+  final DateTime? occurredAt;
   final bool fromScreenshot;
   const AddPrefill({
     this.type,
     this.amountPaise,
     this.party,
     this.notes,
+    this.category,
+    this.paymentMode,
+    this.occurredAt,
     this.fromScreenshot = false,
   });
 }
@@ -31,11 +40,15 @@ class AddTransactionScreen extends ConsumerStatefulWidget {
     this.initialType = 'expense',
     this.prefill,
     this.editing,
+    this.initialEventId,
   });
 
   final String initialType; // 'income' | 'expense'
   final AddPrefill? prefill;
   final Txn? editing;
+
+  /// Pre-selects this event (e.g. when adding from an event detail screen).
+  final String? initialEventId;
 
   @override
   ConsumerState<AddTransactionScreen> createState() =>
@@ -61,6 +74,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
       _paymentMode = e.paymentMode;
       _tag = e.tag;
       _date = e.occurredAt;
+      _eventId = e.eventId;
       // Pre-select the category — resolved once `kSeedCategories` is available.
       final match = kSeedCategories
           .where((c) => c.kind == e.type && c.name == e.category)
@@ -68,16 +82,26 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
       if (match.isNotEmpty) _category = match.first;
       return;
     }
+    _eventId = widget.initialEventId;
     final p = widget.prefill;
     if (p != null) {
       if (p.amountPaise != null) _amountPaise = p.amountPaise!;
       if (p.party != null) _partyController.text = p.party!;
       if (p.notes != null) _noteController.text = p.notes!;
+      if (p.paymentMode != null) _paymentMode = p.paymentMode!;
+      if (p.category != null) {
+        final match = kSeedCategories
+            .where((c) => c.kind == _type && c.name == p.category)
+            .toList();
+        if (match.isNotEmpty) _category = match.first;
+      }
+      if (p.occurredAt != null) _date = p.occurredAt!;
     }
   }
   SeedCategory? _category;
   String _paymentMode = 'Cash';
   String? _tag;
+  String? _eventId;
   final _partyController = TextEditingController();
   final _noteController = TextEditingController();
   DateTime _date = DateTime.now();
@@ -205,6 +229,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
           partyName: party,
           notes: notes,
           tag: _tag,
+          eventId: _eventId,
         );
       } else {
         await repo.add(
@@ -218,6 +243,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
           notes: notes,
           tag: _tag,
           source: _source,
+          eventId: _eventId,
         );
       }
       if (!mounted) return;
@@ -334,6 +360,11 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                     isDense: true,
                     prefixIcon: const Icon(Icons.person_outline),
                   ),
+                ),
+                const SizedBox(height: 12),
+                _EventPicker(
+                  selectedId: _eventId,
+                  onChanged: (id) => setState(() => _eventId = id),
                 ),
                 const SizedBox(height: 8),
                 TextButton.icon(
@@ -571,6 +602,121 @@ class _Keypad extends StatelessWidget {
             digit(0),
             key(const Icon(Icons.backspace_outlined), onBackspace),
           ]),
+        ],
+      ),
+    );
+  }
+}
+
+/// Optional event link. Shows non-settled events; searchable when there are
+/// many. Falls back to nothing when the business has no events.
+class _EventPicker extends ConsumerWidget {
+  const _EventPicker({required this.selectedId, required this.onChanged});
+
+  final String? selectedId;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final events = ref.watch(eventsProvider).asData?.value ?? const <Event>[];
+    // Selectable: non-settled events, plus the currently linked one (so an
+    // edit of an old entry still shows its event even if settled).
+    final selectable = [
+      for (final e in events)
+        if (!e.isSettled || e.id == selectedId) e,
+    ];
+    if (selectable.isEmpty) return const SizedBox.shrink();
+
+    final selected =
+        selectable.where((e) => e.id == selectedId).toList();
+    final label = selected.isEmpty ? null : selected.first.name;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () => _pick(context, selectable),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'Event (optional)',
+          prefixIcon: const Icon(Icons.celebration_outlined),
+          border: const OutlineInputBorder(),
+          isDense: true,
+          suffixIcon: label == null
+              ? const Icon(Icons.arrow_drop_down)
+              : IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: () => onChanged(null),
+                ),
+        ),
+        child: Text(label ?? 'None'),
+      ),
+    );
+  }
+
+  Future<void> _pick(BuildContext context, List<Event> events) async {
+    final chosen = await showModalBottomSheet<Event>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: events.length > 8,
+      builder: (ctx) => _EventPickList(events: events),
+    );
+    if (chosen != null) onChanged(chosen.id);
+  }
+}
+
+class _EventPickList extends StatefulWidget {
+  const _EventPickList({required this.events});
+  final List<Event> events;
+
+  @override
+  State<_EventPickList> createState() => _EventPickListState();
+}
+
+class _EventPickListState extends State<_EventPickList> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final searchable = widget.events.length > 8;
+    final list = _query.isEmpty
+        ? widget.events
+        : widget.events
+            .where((e) =>
+                e.name.toLowerCase().contains(_query.toLowerCase()) ||
+                (e.customerName ?? '')
+                    .toLowerCase()
+                    .contains(_query.toLowerCase()))
+            .toList();
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (searchable)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: TextField(
+                autofocus: true,
+                onChanged: (v) => setState(() => _query = v),
+                decoration: const InputDecoration(
+                  hintText: 'Search events',
+                  prefixIcon: Icon(Icons.search),
+                  isDense: true,
+                ),
+              ),
+            ),
+          Flexible(
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                for (final e in list)
+                  ListTile(
+                    leading: const Icon(Icons.celebration_outlined),
+                    title: Text(e.name),
+                    subtitle: Text(DateFormat('d MMM yyyy').format(e.eventDate)),
+                    onTap: () => Navigator.pop(context, e),
+                  ),
+              ],
+            ),
+          ),
         ],
       ),
     );

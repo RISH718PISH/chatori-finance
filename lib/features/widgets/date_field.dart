@@ -8,11 +8,15 @@ class DateField extends StatefulWidget {
     required this.label,
     required this.initial,
     required this.onChanged,
+    this.allowFuture = false,
   });
 
   final String label;
   final DateTime initial;
   final ValueChanged<DateTime> onChanged;
+
+  /// Allow picking dates well into the future (e.g. upcoming events).
+  final bool allowFuture;
 
   @override
   State<DateField> createState() => _DateFieldState();
@@ -26,7 +30,9 @@ class _DateFieldState extends State<DateField> {
       context: context,
       initialDate: _value,
       firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 1)),
+      lastDate: widget.allowFuture
+          ? DateTime.now().add(const Duration(days: 730))
+          : DateTime.now().add(const Duration(days: 1)),
     );
     if (picked != null) {
       setState(() => _value = picked);

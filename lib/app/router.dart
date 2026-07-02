@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import '../data/models/txn.dart';
 import '../features/advances/advances_screen.dart';
 import '../features/customers/customers_screen.dart';
+import '../features/events/event_detail_screen.dart';
+import '../features/events/events_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/reports/reports_screen.dart';
 import '../features/salary/salary_screen.dart';
@@ -28,8 +30,18 @@ final appRouter = GoRouter(
             (state.uri.queryParameters['type'] == 'income'
                 ? 'income'
                 : 'expense');
-        return AddTransactionScreen(initialType: type, prefill: prefill);
+        return AddTransactionScreen(
+          initialType: type,
+          prefill: prefill,
+          initialEventId: state.uri.queryParameters['event'],
+        );
       },
+    ),
+    GoRoute(path: '/events', builder: (_, _) => const EventsScreen()),
+    GoRoute(
+      path: '/events/:id',
+      builder: (_, state) =>
+          EventDetailScreen(eventId: state.pathParameters['id']!),
     ),
     GoRoute(
         path: '/transactions',

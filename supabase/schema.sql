@@ -94,6 +94,27 @@ create table if not exists public.advance_records (
   created_at timestamptz not null default now()
 );
 
+-- Catering events/parties — per-event P&L is computed from transactions
+-- linked via transactions.event_id.
+create table if not exists public.events (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references public.businesses (id) on delete cascade,
+  name text not null,                       -- e.g. "Sharma wedding — 15 Aug"
+  customer_name text,
+  event_date date not null,
+  guest_count int,
+  quoted_amount_paise bigint not null default 0,
+  status text not null default 'upcoming',  -- upcoming | done | settled
+  notes text,
+  created_by uuid references auth.users (id),
+  created_at timestamptz not null default now()
+);
+create index if not exists events_business_date
+  on public.events (business_id, event_date desc);
+
+alter table public.transactions
+  add column if not exists event_id uuid references public.events (id) on delete set null;
+
 -- ─────────────────────────────────────────────────────────────
 -- 3. Helper: business ids the current user belongs to
 --    (SECURITY DEFINER avoids RLS recursion on business_members)
@@ -117,6 +138,7 @@ alter table public.transactions      enable row level security;
 alter table public.staff             enable row level security;
 alter table public.salary_records    enable row level security;
 alter table public.advance_records   enable row level security;
+alter table public.events            enable row level security;
 
 -- businesses: members can read; creator can update
 drop policy if exists biz_read on public.businesses;
@@ -132,7 +154,7 @@ create policy mem_read on public.business_members
 do $$
 declare t text;
 begin
-  foreach t in array array['transactions','staff','salary_records','advance_records']
+  foreach t in array array['transactions','staff','salary_records','advance_records','events']
   loop
     execute format('drop policy if exists %I_rw on public.%I;', t, t);
     execute format($f$

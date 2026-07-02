@@ -10,6 +10,7 @@ class Txn {
   final String? notes;
   final String? tag;
   final String source;
+  final String? eventId;
 
   const Txn({
     required this.id,
@@ -22,6 +23,7 @@ class Txn {
     this.notes,
     this.tag,
     this.source = 'manual',
+    this.eventId,
   });
 
   bool get isIncome => type == 'income';
@@ -37,6 +39,7 @@ class Txn {
         notes: j['notes'] as String?,
         tag: j['tag'] as String?,
         source: (j['source'] as String?) ?? 'manual',
+        eventId: j['event_id'] as String?,
       );
 }
 

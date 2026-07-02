@@ -15,8 +15,8 @@ class AppSemantics {
   static const expense = Color(0xFFC24B00);
   // Warning highlight (pending, outstanding advance).
   static const warning = Color(0xFFB35C00);
-  // Card border.
-  static const cardBorder = Color(0xFFE2E8F0);
+  // Card border — warm tone to match the wheatish surfaces.
+  static const cardBorder = Color(0xFFE4DAC2);
 }
 
 /// Typography tokens (Kitchen Ledger design):

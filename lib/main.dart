@@ -31,6 +31,9 @@ class ChatoriApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
+      // Always light: the owner found system dark mode too dark. The dark
+      // theme stays defined above for future use.
+      themeMode: ThemeMode.light,
       routerConfig: appRouter,
       builder: (context, child) => AppLockGate(
         child: AuthGate(child: child ?? const SizedBox()),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../core/design.dart';
+
 /// Kitchen Ledger design system, faithfully applied.
 ///
 /// - Primary: Deep Slate (`#131b2e`) — navigation, headings, structure
@@ -12,14 +14,14 @@ import 'package:google_fonts/google_fonts.dart';
 class AppTheme {
   AppTheme._();
 
-  // Scaffold + AppBar background. Kept pure white so blank screens don't
-  // look "dark" and cards remain visible via their 1px outline + soft shadow.
-  static const _bg = Color(0xFFFFFFFF);
-  static const _surface = Color(0xFFFFFFFF);
-  static const _surfaceContainer = Color(0xFFECEEF0);
-  static const _surfaceContainerHigh = Color(0xFFE6E8EA);
-  static const _outline = Color(0xFF76777D);
-  static const _outlineVariant = Color(0xFFC6C6CD);
+  // Warm "wheatish" palette — the owner found neutral/dark surfaces too dark.
+  // Cards stay near-white so they pop against the wheat scaffold.
+  static const _bg = Color(0xFFF7F1E3); // warm wheat
+  static const _surface = Color(0xFFFFFDF6); // warm off-white (cards)
+  static const _surfaceContainer = Color(0xFFEDE4D0);
+  static const _surfaceContainerHigh = Color(0xFFE6DCC4);
+  static const _outline = Color(0xFF8A8069);
+  static const _outlineVariant = Color(0xFFD6CBB0);
 
   static ThemeData light() {
     const scheme = ColorScheme(
@@ -43,10 +45,10 @@ class AppTheme {
       surface: _bg,
       onSurface: Color(0xFF191C1E),
       surfaceContainerLowest: _surface,
-      surfaceContainerLow: Color(0xFFF2F4F6),
+      surfaceContainerLow: Color(0xFFF3ECDC),
       surfaceContainer: _surfaceContainer,
       surfaceContainerHigh: _surfaceContainerHigh,
-      surfaceContainerHighest: Color(0xFFE0E3E5),
+      surfaceContainerHighest: Color(0xFFDFD4B8),
       onSurfaceVariant: Color(0xFF45464D),
       outline: _outline,
       outlineVariant: _outlineVariant,
@@ -113,7 +115,7 @@ class AppTheme {
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: scheme.outlineVariant, width: 1),
+          side: const BorderSide(color: AppSemantics.cardBorder, width: 1),
         ),
         shadowColor: const Color(0x0D0F172A),
       ),

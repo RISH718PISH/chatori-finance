@@ -253,3 +253,26 @@ I can write all the code regardless; you'd run these to produce/install the APK.
 ```
 
 When you've reviewed, say the word and I'll start at **M0** (project scaffold + encrypted DB + app lock).
+
+---
+
+## Addendum (July 2026): shipped beyond the original plan
+
+The storage layer moved from local-Drift-only to **Supabase (Postgres)** for
+multi-device, multi-user sync (owners: Rishabh + Ankita). RLS scopes every row
+to a business via `my_business_ids()`; see `supabase/schema.sql`.
+
+Added since v1:
+- **Events module** (`events` table + `transactions.event_id`): per-party P&L
+  (revenue vs linked expenses, per-plate figures, money-to-collect).
+- **Monthly P&L** view in Reports: categories are mapped to
+  revenue/COGS/operating via `plSection` on `SeedCategory`
+  (`lib/core/categories.dart`); computation in
+  `lib/features/reports/reports_providers.dart` (`MonthlyPl`).
+- **Hyperpure invoice OCR** (`lib/features/screenshot/hyperpure_parser.dart`),
+  rules-based, review-first — same trust model as the Paytm parser. Scanned
+  bill images are stored in the private `attachments` Storage bucket
+  (`<business_id>/<uuid>.jpg`) with a device-local fallback.
+- **Kitchen Ledger design system** (`lib/app/theme.dart`,
+  `lib/core/design.dart`): warm wheatish light theme (always light),
+  Inter for UI, Geist for numerals.

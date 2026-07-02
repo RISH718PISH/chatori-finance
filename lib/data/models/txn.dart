@@ -11,6 +11,7 @@ class Txn {
   final String? tag;
   final String source;
   final String? eventId;
+  final String? attachmentPath;
 
   const Txn({
     required this.id,
@@ -24,6 +25,7 @@ class Txn {
     this.tag,
     this.source = 'manual',
     this.eventId,
+    this.attachmentPath,
   });
 
   bool get isIncome => type == 'income';
@@ -40,6 +42,7 @@ class Txn {
         tag: j['tag'] as String?,
         source: (j['source'] as String?) ?? 'manual',
         eventId: j['event_id'] as String?,
+        attachmentPath: j['attachment_path'] as String?,
       );
 }
 

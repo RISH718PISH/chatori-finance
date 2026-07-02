@@ -200,3 +200,25 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
+
+-- ─────────────────────────────────────────────────────────────
+-- 6. Attachments bucket (bill photos). Private; members of a business can
+--    read/write only their business's folder (path: <business_id>/<file>).
+-- ─────────────────────────────────────────────────────────────
+insert into storage.buckets (id, name, public)
+  values ('attachments', 'attachments', false)
+  on conflict (id) do nothing;
+
+drop policy if exists attachments_member_rw on storage.objects;
+create policy attachments_member_rw on storage.objects
+  for all
+  using (
+    bucket_id = 'attachments'
+    and (storage.foldername(name))[1] in
+        (select public.my_business_ids()::text)
+  )
+  with check (
+    bucket_id = 'attachments'
+    and (storage.foldername(name))[1] in
+        (select public.my_business_ids()::text)
+  );

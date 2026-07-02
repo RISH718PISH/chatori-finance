@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -22,6 +24,10 @@ class AddPrefill {
   final String? paymentMode;
   final DateTime? occurredAt;
   final bool fromScreenshot;
+
+  /// Local image (e.g. the scanned bill) to attach to the entry on save.
+  final String? attachmentLocalPath;
+
   const AddPrefill({
     this.type,
     this.amountPaise,
@@ -31,6 +37,7 @@ class AddPrefill {
     this.paymentMode,
     this.occurredAt,
     this.fromScreenshot = false,
+    this.attachmentLocalPath,
   });
 }
 
@@ -232,6 +239,14 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
           eventId: _eventId,
         );
       } else {
+        // Persist the scanned bill (if any) before inserting the entry.
+        String? attachmentPath;
+        final localImage = widget.prefill?.attachmentLocalPath;
+        if (localImage != null) {
+          attachmentPath = await ref
+              .read(attachmentRepoProvider)
+              .store(businessId: biz, localImagePath: localImage);
+        }
         await repo.add(
           businessId: biz,
           type: _type,
@@ -244,6 +259,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
           tag: _tag,
           source: _source,
           eventId: _eventId,
+          attachmentPath: attachmentPath,
         );
       }
       if (!mounted) return;
@@ -366,6 +382,10 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                   selectedId: _eventId,
                   onChanged: (id) => setState(() => _eventId = id),
                 ),
+                if (_isEdit && widget.editing?.attachmentPath != null) ...[
+                  const SizedBox(height: 12),
+                  _AttachmentThumb(path: widget.editing!.attachmentPath!),
+                ],
                 const SizedBox(height: 8),
                 TextButton.icon(
                   onPressed: () => setState(() => _showMore = !_showMore),
@@ -719,6 +739,71 @@ class _EventPickListState extends State<_EventPickList> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Thumbnail of an attached bill photo; tap for full screen. Handles both
+/// Supabase Storage paths (signed URL) and `local:` fallback paths.
+class _AttachmentThumb extends ConsumerWidget {
+  const _AttachmentThumb({required this.path});
+  final String path;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final repo = ref.watch(attachmentRepoProvider);
+
+    Widget thumb(ImageProvider provider) => InkWell(
+          onTap: () => showDialog<void>(
+            context: context,
+            builder: (_) => Dialog(
+              insetPadding: const EdgeInsets.all(12),
+              child: InteractiveViewer(
+                child: Image(image: provider, fit: BoxFit.contain),
+              ),
+            ),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image(
+              image: provider,
+              height: 120,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => const SizedBox(
+                height: 48,
+                child: Center(child: Text('Attachment unavailable')),
+              ),
+            ),
+          ),
+        );
+
+    if (repo.isLocal(path)) {
+      final file = File(repo.localFilePath(path));
+      if (!file.existsSync()) return const SizedBox.shrink();
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionLabel('Attached bill (this device only)'),
+          thumb(FileImage(file)),
+        ],
+      );
+    }
+
+    return FutureBuilder<String?>(
+      future: ref.read(attachmentRepoProvider).signedUrl(path),
+      builder: (context, snap) {
+        if (!snap.hasData || snap.data == null) {
+          return const SizedBox.shrink();
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const _SectionLabel('Attached bill'),
+            thumb(NetworkImage(snap.data!)),
+          ],
+        );
+      },
     );
   }
 }

@@ -20,6 +20,7 @@ class TransactionRepository {
     String? tag,
     String source = 'manual',
     String? eventId,
+    String? attachmentPath,
   }) async {
     await _client.from('transactions').insert({
       'business_id': businessId,
@@ -33,6 +34,7 @@ class TransactionRepository {
       'tag': tag,
       'source': source,
       'event_id': eventId,
+      'attachment_path': attachmentPath,
       'created_by': _client.auth.currentUser?.id,
     });
   }

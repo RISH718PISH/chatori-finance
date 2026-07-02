@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../data/models/txn.dart';
+import '../../data/supabase/attachment_repository.dart';
 import '../../data/supabase/auth_repository.dart';
 import '../../data/supabase/transaction_repository.dart';
 
@@ -14,6 +15,10 @@ final authRepoProvider = Provider<AuthRepository>(
 
 final transactionRepoProvider = Provider<TransactionRepository>(
   (ref) => TransactionRepository(ref.watch(supabaseClientProvider)),
+);
+
+final attachmentRepoProvider = Provider<AttachmentRepository>(
+  (ref) => AttachmentRepository(ref.watch(supabaseClientProvider)),
 );
 
 /// Rebuilds whenever auth state changes (sign in / out).

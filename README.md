@@ -19,6 +19,15 @@ to update the app you just re-download the latest `app-release.apk`.
 - Add income / expense in a few taps (₹, kitchen-specific categories)
 - Shared books for multiple owners (sign in; invite by email)
 - Cloud-synced so each device sees the same data
+- **Events**: track each catering party's P&L — revenue vs linked expenses,
+  per-plate cost, money left to collect
+- **Monthly P&L** in Reports: Revenue → COGS → Gross profit → Operating →
+  Net, with food-cost % warning and month-over-month deltas
+- **Scan bill**: Paytm/UPI screenshots *and* Hyperpure invoices are read
+  on-device (OCR) into a pre-filled entry you review; the bill photo is
+  attached to the saved entry
+- Salaries & staff advances (with advance deduction), customer/vendor ledgers
+- WhatsApp-ready summaries + CSV export
 - App lock (fingerprint / PIN), optional
 
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the design and build plan, and

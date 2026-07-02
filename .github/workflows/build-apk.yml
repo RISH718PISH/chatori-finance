@@ -56,8 +56,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "1.11"
+          name: "1.12"
           body: |
-            Chatori Finance **1.11** — Reports export (WhatsApp summary + CSV), white background.
+            Chatori Finance **1.12** — Events P&L, Monthly P&L statement, Hyperpure invoice scanning, wheatish theme.
             Download **app-release.apk** below and install it on your phone.
           files: build/app/outputs/flutter-apk/app-release.apk

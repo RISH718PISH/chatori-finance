@@ -111,7 +111,7 @@ class HomeScreen extends ConsumerWidget {
               _NavTile('Advances', Icons.account_balance_wallet_outlined, '/advances'),
               _NavTile('Customers', Icons.people_alt_outlined, '/customers'),
               _NavTile('Vendors', Icons.store_outlined, '/vendors'),
-              _NavTile('Paytm', Icons.image_outlined, '/import'),
+              _NavTile('Scan bill', Icons.document_scanner_outlined, '/import'),
               _NavTile('Reports', Icons.bar_chart_outlined, '/reports'),
             ],
           ),

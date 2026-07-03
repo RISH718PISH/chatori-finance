@@ -36,10 +36,27 @@ void refreshBooks(WidgetRef ref) {
 }
 
 /// Current month key, e.g. "2026-07".
-String currentMonthKey() {
-  final now = DateTime.now();
-  return '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}';
+String currentMonthKey() => monthKeyFor(DateTime.now());
+
+String monthKeyFor(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}';
+
+/// The month shown on the Salaries screen. Salaries are usually paid early
+/// the NEXT month, so the owner needs to flip back to (e.g.) July while
+/// standing in August.
+class SelectedSalaryMonth extends Notifier<DateTime> {
+  @override
+  DateTime build() {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month);
+  }
+
+  void prev() => state = DateTime(state.year, state.month - 1);
+  void next() => state = DateTime(state.year, state.month + 1);
 }
+
+final selectedSalaryMonthProvider =
+    NotifierProvider<SelectedSalaryMonth, DateTime>(SelectedSalaryMonth.new);
 
 /// Paise paid to [staffId] in [month] (sum of this month's salary records).
 int paidForStaffInMonth(List<SalaryRecord> records, String staffId, String month) {

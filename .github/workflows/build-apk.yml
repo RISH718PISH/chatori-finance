@@ -56,8 +56,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "1.14"
+          name: "1.15"
           body: |
-            Chatori Finance **1.14** — fix FAB overlapping bottom card, remove duplicate Customer-advances card from Home.
+            Chatori Finance **1.15** — salary month calendar (view & pay any month's salary), plus 1.14's layout fixes.
             Download **app-release.apk** below and install it on your phone.
           files: build/app/outputs/flutter-apk/app-release.apk

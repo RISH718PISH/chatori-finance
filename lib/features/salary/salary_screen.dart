@@ -20,7 +20,8 @@ class SalaryScreen extends ConsumerWidget {
         ref.watch(salaryProvider).asData?.value ?? const <SalaryRecord>[];
     final advances =
         ref.watch(advancesProvider).asData?.value ?? const <Advance>[];
-    final month = currentMonthKey();
+    final selectedMonth = ref.watch(selectedSalaryMonthProvider);
+    final month = monthKeyFor(selectedMonth);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Salaries')),
@@ -29,7 +30,31 @@ class SalaryScreen extends ConsumerWidget {
         icon: const Icon(Icons.person_add_alt),
         label: const Text('Add staff'),
       ),
-      body: staffAsync.when(
+      body: Column(
+        children: [
+          _MonthBar(
+            month: selectedMonth,
+            onPrev: () =>
+                ref.read(selectedSalaryMonthProvider.notifier).prev(),
+            onNext: () =>
+                ref.read(selectedSalaryMonthProvider.notifier).next(),
+          ),
+          Expanded(child: _staffList(context, ref, staffAsync, salary,
+              advances, selectedMonth, month)),
+        ],
+      ),
+    );
+  }
+
+  Widget _staffList(
+      BuildContext context,
+      WidgetRef ref,
+      AsyncValue<List<Staff>> staffAsync,
+      List<SalaryRecord> salary,
+      List<Advance> advances,
+      DateTime selectedMonth,
+      String month) {
+    return staffAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
         data: (staff) {
@@ -77,7 +102,7 @@ class SalaryScreen extends ConsumerWidget {
                     onDeletePayment: (r) => _deletePayment(context, ref, s, r),
                     onPay: () => _paySalary(
                         context, ref, s, paid, adjusted, outstanding,
-                        openAdvances),
+                        openAdvances, selectedMonth),
                     onGiveAdvance: () => _giveAdvance(context, ref, s),
                     onRecover: () =>
                         _recoverAdvance(context, ref, s, openAdvances),
@@ -89,8 +114,7 @@ class SalaryScreen extends ConsumerWidget {
           ),
           );
         },
-      ),
-    );
+      );
   }
 
   static int _remainingSalary(int monthly, int paid, int adjusted) =>
@@ -280,8 +304,15 @@ class SalaryScreen extends ConsumerWidget {
         content: Text('Payment to ${s.name} removed')));
   }
 
-  Future<void> _paySalary(BuildContext context, WidgetRef ref, Staff s, int paid,
-      int adjusted, int outstanding, List<Advance> openAdvances) async {
+  Future<void> _paySalary(
+      BuildContext context,
+      WidgetRef ref,
+      Staff s,
+      int paid,
+      int adjusted,
+      int outstanding,
+      List<Advance> openAdvances,
+      DateTime forMonth) async {
     final monthly = s.monthlySalaryPaise;
     final remaining = _remainingSalary(monthly, paid, adjusted);
     final net = _netToPay(monthly, paid, adjusted, outstanding);
@@ -297,14 +328,15 @@ class SalaryScreen extends ConsumerWidget {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) => AlertDialog(
-          title: Text('Pay ${s.name}'),
+          title: Text('Pay ${s.name} — ${DateFormat('MMM yyyy').format(forMonth)}'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text('Salary for ${DateFormat('MMMM yyyy').format(forMonth)}'),
                 Text('Monthly ${Money.format(monthly)}'),
-                Text('Already paid this month: ${Money.format(paid)}'),
+                Text('Already paid for this month: ${Money.format(paid)}'),
                 if (deductable > 0)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
@@ -358,7 +390,7 @@ class SalaryScreen extends ConsumerWidget {
       staffId: s.id,
       amountPaise: cashPaise,
       advanceAdjustedPaise: adjustNow,
-      month: currentMonthKey(),
+      month: monthKeyFor(forMonth),
       paymentMode: 'Cash',
       paymentDate: payDate,
     );
@@ -748,4 +780,40 @@ class _Empty extends StatelessWidget {
           ],
         ),
       );
+}
+
+/// Month selector for the salary cycle (salaries for July are usually paid in
+/// early August, so the owner flips back a month).
+class _MonthBar extends StatelessWidget {
+  const _MonthBar(
+      {required this.month, required this.onPrev, required this.onNext});
+  final DateTime month;
+  final VoidCallback onPrev;
+  final VoidCallback onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final isCurrent = month.year == now.year && month.month == now.month;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          IconButton(onPressed: onPrev, icon: const Icon(Icons.chevron_left)),
+          Column(
+            children: [
+              Text(DateFormat('MMMM yyyy').format(month),
+                  style: Theme.of(context).textTheme.titleMedium),
+              Text('salary month', style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ),
+          IconButton(
+            onPressed: isCurrent ? null : onNext,
+            icon: const Icon(Icons.chevron_right),
+          ),
+        ],
+      ),
+    );
+  }
 }

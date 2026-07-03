@@ -49,3 +49,6 @@ key.properties
 *.jks
 *.keystore
 upload-keystore.*
+
+# Skill review artifact (regenerated locally)
+accountant-skill-review.html

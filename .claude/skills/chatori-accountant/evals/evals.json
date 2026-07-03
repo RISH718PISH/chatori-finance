@@ -1,0 +1,44 @@
+{
+  "skill_name": "chatori-accountant",
+  "evals": [
+    {
+      "id": 0,
+      "eval_name": "june-pl-from-csv",
+      "prompt": "I've exported June's transactions from my Chatori Finance app (chatori-june.csv). Compile my June P&L properly like an accountant would and tell me straight — did I actually make money in June?",
+      "files": ["chatori-june.csv"],
+      "assertions": [
+        "Excludes the Rs 30,000 customer advance from earned revenue and reports it as a liability / held-not-earned line",
+        "Counts Sandeep's June salary expense as Rs 25,000 (20,000 cash + 5,000 advance adjusted), not Rs 20,000",
+        "Excludes the Rs 5,000 staff advance to Neeraj from expenses (treats it as a receivable)",
+        "Separates COGS from operating expenses and reports food cost %, flagging it is above 40%",
+        "Concludes June was a LOSS on an adjusted basis (approx -Rs 5,800), not a profit",
+        "Ends with a plain-language owner summary"
+      ]
+    },
+    {
+      "id": 1,
+      "eval_name": "advance-treatment",
+      "prompt": "A customer just paid me Rs 50,000 advance for a wedding I'm catering in September. How should this show up in my books and in my monthly report?",
+      "files": [],
+      "assertions": [
+        "States the advance is unearned revenue / a liability, not income of the month received",
+        "Says it becomes revenue only when the wedding is delivered (September / on completion)",
+        "Gives practical recording steps for the app (Customer Advance category, party name, link to the event)",
+        "Explains how the monthly report presents it (held/unearned line, excluded from earned revenue)"
+      ]
+    },
+    {
+      "id": 2,
+      "eval_name": "month-end-close",
+      "prompt": "It's 3rd August and I'm closing July's books for my catering business. I paid the staff their July salaries yesterday. What do I need to do, step by step?",
+      "files": [],
+      "assertions": [
+        "Instructs to record/verify salaries against July (the month they are FOR), not August (payment date)",
+        "Includes reconciling cash and UPI/bank balances against actual balances",
+        "Covers customer advances: map to events and recognize delivered events as revenue",
+        "Covers confirming staff advance balances",
+        "Produces or commits to an adjusted P&L plus a plain-language owner summary"
+      ]
+    }
+  ]
+}

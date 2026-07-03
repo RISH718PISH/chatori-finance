@@ -62,7 +62,7 @@ class AdvancesScreen extends ConsumerWidget {
               ),
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
                   children: [
                     for (final a in advances)
                       _AdvanceCard(

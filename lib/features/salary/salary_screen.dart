@@ -44,7 +44,8 @@ class SalaryScreen extends ConsumerWidget {
               await ref.read(staffProvider.future);
             },
             child: ListView(
-            padding: const EdgeInsets.all(12),
+            // Extra bottom padding so the FAB never covers the last card's buttons.
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
             physics: const AlwaysScrollableScrollPhysics(),
             children: [
               for (final s in staff)

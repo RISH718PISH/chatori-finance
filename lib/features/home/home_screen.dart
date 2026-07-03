@@ -15,7 +15,6 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final totals = ref.watch(todayTotalsProvider);
     final recent = ref.watch(recentTransactionsProvider);
-    final custAdv = ref.watch(customerAdvancesProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -116,12 +115,6 @@ class HomeScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 20),
-
-          // --- Customer advances ---
-          if (custAdv.isNotEmpty) ...[
-            _CustomerAdvancesSection(advances: custAdv),
-            const SizedBox(height: 20),
-          ],
 
           // --- Recent entries ---
           Row(
@@ -244,76 +237,6 @@ class _TxnTile extends StatelessWidget {
         '${isIncome ? '+' : '−'}${Money.format(txn.amountPaise)}',
         size: DataSize.sm,
         color: color,
-      ),
-    );
-  }
-}
-
-class _CustomerAdvancesSection extends StatelessWidget {
-  const _CustomerAdvancesSection({required this.advances});
-  final List<Txn> advances;
-
-  @override
-  Widget build(BuildContext context) {
-    final total = advances.fold<int>(0, (s, t) => s + t.amountPaise);
-    final show = advances.take(4).toList();
-    return Card(
-      color: AppSemantics.income.withValues(alpha: 0.06),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: AppSemantics.income.withValues(alpha: 0.35)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.savings, color: AppSemantics.income),
-                const SizedBox(width: 8),
-                Expanded(
-                    child: LabelUpper('Customer advances',
-                        color: AppSemantics.income)),
-                DataNumber(Money.format(total, decimals: false),
-                    size: DataSize.md, color: AppSemantics.income),
-              ],
-            ),
-            const SizedBox(height: 8),
-            for (final t in show)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    const Icon(Icons.person_outline, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        (t.partyName?.isNotEmpty ?? false)
-                            ? t.partyName!
-                            : 'Unnamed customer',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(DateFormat('d MMM').format(t.occurredAt),
-                        style: Theme.of(context).textTheme.bodySmall),
-                    const SizedBox(width: 12),
-                    DataNumber(Money.format(t.amountPaise),
-                        size: DataSize.sm, color: AppSemantics.income),
-                  ],
-                ),
-              ),
-            if (advances.length > show.length)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text('+ ${advances.length - show.length} more',
-                    style: Theme.of(context).textTheme.bodySmall),
-              ),
-          ],
-        ),
       ),
     );
   }

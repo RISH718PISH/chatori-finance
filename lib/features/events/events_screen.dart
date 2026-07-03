@@ -56,7 +56,7 @@ class EventsScreen extends ConsumerWidget {
               } catch (_) {}
             },
             child: ListView(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
               physics: const AlwaysScrollableScrollPhysics(),
               children: [
                 if (upcoming.isNotEmpty) ...[

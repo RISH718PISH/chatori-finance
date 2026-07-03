@@ -59,12 +59,6 @@ final todayTotalsProvider = Provider<Totals>((ref) {
   return Totals.fromTxns(todays);
 });
 
-/// Customer advances (income category "Customer Advance"), newest first.
-final customerAdvancesProvider = Provider<List<Txn>>((ref) {
-  final all = ref.watch(businessTxnsProvider).asData?.value ?? const [];
-  return all.where((t) => t.category == 'Customer Advance').toList();
-});
-
 /// Call after adding / editing / deleting a transaction.
 void refreshTransactions(WidgetRef ref) {
   ref.invalidate(businessTxnsProvider);

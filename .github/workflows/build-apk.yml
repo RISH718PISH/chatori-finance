@@ -56,8 +56,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "1.13"
+          name: "1.14"
           body: |
-            Chatori Finance **1.13** — salary payment history with undo (reset test payments).
+            Chatori Finance **1.14** — fix FAB overlapping bottom card, remove duplicate Customer-advances card from Home.
             Download **app-release.apk** below and install it on your phone.
           files: build/app/outputs/flutter-apk/app-release.apk

@@ -56,8 +56,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "1.15"
+          name: "1.16"
           body: |
-            Chatori Finance **1.15** — salary month calendar (view & pay any month's salary), plus 1.14's layout fixes.
+            Chatori Finance **1.16** — fix invisible chip labels (payment modes, filters) when selected.
             Download **app-release.apk** below and install it on your phone.
           files: build/app/outputs/flutter-apk/app-release.apk

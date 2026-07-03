@@ -152,13 +152,25 @@ class AppTheme {
           ),
         ),
       ),
-      // Chips: pill for status, 8px otherwise
+      // Chips: pill for status, pill for choice/filter chips. Label colors are
+      // pinned explicitly for both selected and unselected states — without
+      // this, Material 3 was rendering selected labels in near-white on the
+      // light selected background, making payment-mode chips unreadable.
       chipTheme: ChipThemeData(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(9999),
           side: BorderSide(color: scheme.outlineVariant),
         ),
-        labelStyle: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500),
+        labelStyle: GoogleFonts.inter(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          color: scheme.onSurface,
+        ),
+        secondaryLabelStyle: GoogleFonts.inter(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: scheme.onPrimaryContainer,
+        ),
         side: BorderSide(color: scheme.outlineVariant),
         backgroundColor: scheme.surfaceContainerLowest,
         selectedColor: scheme.primaryContainer,

@@ -23,7 +23,7 @@ class SeedCategory {
 }
 
 const List<SeedCategory> kSeedCategories = [
-  // Income types
+  // ── Income types ─────────────────────────────────────────────────
   SeedCategory('inc_catering', 'Catering', 'income', 'restaurant', 0,
       PlSection.revenue),
   SeedCategory('inc_cloud', 'Cloud Kitchen', 'income', 'storefront', 1,
@@ -33,31 +33,72 @@ const List<SeedCategory> kSeedCategories = [
   SeedCategory('inc_other', 'Other Income', 'income', 'payments', 3,
       PlSection.revenue),
 
-  // Expense heads (PRD 9.3), in display order. plSection marks whether each is
-  // a direct food/packaging input (COGS) or an operating expense.
+  // ── Expense heads ────────────────────────────────────────────────
+  // Ordered for the picker grid: payroll → food staples → beverages →
+  // bakery → fuel/packaging → event-specific → general overhead.
+  // plSection controls where each line sits in the monthly P&L
+  // (COGS = direct food/event inputs; Operating = indirect/overhead).
+
+  // Payroll (Operating)
   SeedCategory(
       'exp_salaries', 'Salaries', 'expense', 'badge', 0, PlSection.operating),
   SeedCategory('exp_advances', 'Advances', 'expense', 'account_balance_wallet',
       1, PlSection.operating),
+
+  // Food staples (COGS)
   SeedCategory('exp_groceries', 'Groceries', 'expense', 'shopping_basket', 2,
       PlSection.cogs),
-  SeedCategory('exp_transport', 'Transport', 'expense', 'local_shipping', 3,
-      PlSection.operating),
-  SeedCategory('exp_oil', 'Oil', 'expense', 'water_drop', 4, PlSection.cogs),
-  SeedCategory('exp_veggies', 'Veggies', 'expense', 'eco', 5, PlSection.cogs),
-  SeedCategory('exp_dairy', 'Dairy', 'expense', 'icecream', 6, PlSection.cogs),
-  SeedCategory('exp_packaging', 'Packaging', 'expense', 'inventory_2', 7,
+  SeedCategory('exp_veggies', 'Veggies', 'expense', 'eco', 3, PlSection.cogs),
+  SeedCategory('exp_dairy', 'Dairy', 'expense', 'icecream', 4, PlSection.cogs),
+  SeedCategory('exp_meat', 'Meat & Poultry', 'expense', 'kebab_dining', 5,
+      PlSection.cogs),
+  SeedCategory('exp_spices', 'Spices & Masalas', 'expense', 'grass', 6,
       PlSection.cogs),
   SeedCategory(
-      'exp_gas', 'Gas/Cylinder', 'expense', 'propane_tank', 8, PlSection.cogs),
-  SeedCategory('exp_rent', 'Rent', 'expense', 'home', 9, PlSection.operating),
-  SeedCategory('exp_electricity', 'Electricity', 'expense', 'bolt', 10,
+      'exp_grains', 'Grains & Flour', 'expense', 'grain', 7, PlSection.cogs),
+  SeedCategory('exp_oil', 'Oil', 'expense', 'water_drop', 8, PlSection.cogs),
+  SeedCategory(
+      'exp_fruits', 'Fruits', 'expense', 'park', 9, PlSection.cogs),
+
+  // Beverages (COGS)
+  SeedCategory('exp_beverages', 'Beverages', 'expense', 'local_bar', 10,
+      PlSection.cogs),
+  SeedCategory('exp_water', 'Water Bottles', 'expense', 'local_drink', 11,
+      PlSection.cogs),
+
+  // Bakery (COGS)
+  SeedCategory('exp_bakery', 'Bakery & Sweets', 'expense', 'cake', 12,
+      PlSection.cogs),
+
+  // Fuel & packaging (COGS)
+  SeedCategory(
+      'exp_gas', 'Gas/Cylinder', 'expense', 'propane_tank', 13, PlSection.cogs),
+  SeedCategory('exp_packaging', 'Packaging', 'expense', 'inventory_2', 14,
+      PlSection.cogs),
+  SeedCategory('exp_disposables', 'Disposables & Cutlery', 'expense',
+      'dinner_dining', 15, PlSection.cogs),
+
+  // Event-specific (COGS — direct event costs)
+  SeedCategory('exp_event_labor', 'Event Labor', 'expense', 'group', 16,
+      PlSection.cogs),
+  SeedCategory('exp_event_rentals', 'Event Rentals', 'expense', 'event_seat',
+      17, PlSection.cogs),
+  SeedCategory('exp_decor', 'Décor & Flowers', 'expense', 'local_florist', 18,
+      PlSection.cogs),
+  SeedCategory('exp_event_transport', 'Event Transportation', 'expense',
+      'airport_shuttle', 19, PlSection.cogs),
+
+  // General overhead (Operating)
+  SeedCategory('exp_transport', 'Transport', 'expense', 'local_shipping', 20,
+      PlSection.operating),
+  SeedCategory('exp_rent', 'Rent', 'expense', 'home', 21, PlSection.operating),
+  SeedCategory('exp_electricity', 'Electricity', 'expense', 'bolt', 22,
       PlSection.operating),
   SeedCategory(
-      'exp_repairs', 'Repairs', 'expense', 'build', 11, PlSection.operating),
-  SeedCategory('exp_marketing', 'Marketing/Ads', 'expense', 'campaign', 12,
+      'exp_repairs', 'Repairs', 'expense', 'build', 23, PlSection.operating),
+  SeedCategory('exp_marketing', 'Marketing/Ads', 'expense', 'campaign', 24,
       PlSection.operating),
-  SeedCategory('exp_misc', 'Miscellaneous', 'expense', 'more_horiz', 13,
+  SeedCategory('exp_misc', 'Miscellaneous', 'expense', 'more_horiz', 25,
       PlSection.operating),
 ];
 

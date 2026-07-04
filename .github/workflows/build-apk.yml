@@ -56,10 +56,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "1.18"
+          name: "1.19"
           body: |
-            Chatori Finance **1.18** — Hyperpure line-item OCR, weekly stats on Home, pie chart accuracy fix, calendar-correct event sections, Cash+UPI split payment mode.
+            Chatori Finance **1.19** — Hyperpure parser rewrite: no more PIN codes / order numbers captured as amounts, table sections properly bounded.
             Download **app-release.apk** below and install it on your phone.
-
-            **⚠️ Backend step** — before installing, run the two `alter table` lines from `supabase/schema.sql` in your Supabase SQL Editor (adds cash_paise + upi_paise columns). Safe to re-run the whole schema; it's idempotent.
           files: build/app/outputs/flutter-apk/app-release.apk

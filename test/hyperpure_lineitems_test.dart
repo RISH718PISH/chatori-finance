@@ -120,6 +120,54 @@ Total  478.00  23.90  501.90
     expect(HyperpureParser.looksLikeHyperpure(ocr), isFalse);
   });
 
+  group('categoryOfItem', () {
+    HyperpureLineItem it(String d, int p) =>
+        HyperpureLineItem(description: d, amountPaise: p);
+
+    test('oil, dairy, spices, foil, sugar all route to distinct buckets', () {
+      expect(HyperpureParser.categoryOfItem(it('Pansari - Kacchi Ghani Mustard Oil, 1 L Bottle', 19005)), 'Oil');
+      expect(HyperpureParser.categoryOfItem(it('John - Cheese (Diced Mozzarella and Cheddar), 1 Kg', 50190)), 'Dairy');
+      expect(HyperpureParser.categoryOfItem(it('MDH - Deggi Mirch, 500 gm', 51450)), 'Spices & Masalas');
+      expect(HyperpureParser.categoryOfItem(it('HOMEFOIL - Aluminium Foil, 75 Meters', 50150)), 'Packaging');
+      expect(HyperpureParser.categoryOfItem(it('Sugar, 10 Kg', 56910)), 'Grains & Flour');
+      expect(HyperpureParser.categoryOfItem(it('Eastmade - Cardamom (Elaichi Green), 100 gm', 33495)), 'Spices & Masalas');
+      expect(HyperpureParser.categoryOfItem(it('Ultimate - Penne Pasta, 5 Kg', 35910)), 'Grains & Flour');
+    });
+
+    test('unrecognised items fall to Groceries, not the last-matched bucket', () {
+      expect(HyperpureParser.categoryOfItem(it('Random SKU XYZ 123', 100)), 'Groceries');
+    });
+  });
+
+  group('groupHyperpureItemsByCategory', () {
+    test('sums items into per-category buckets, sorted by total desc', () {
+      final items = [
+        HyperpureLineItem(description: 'Sunflower Oil 15L', amountPaise: 289000),
+        HyperpureLineItem(description: 'Paneer 1kg', amountPaise: 148000),
+        HyperpureLineItem(description: 'Mustard Oil 1L', amountPaise: 19005),
+        HyperpureLineItem(description: 'Cheese Mozzarella', amountPaise: 50190),
+        HyperpureLineItem(description: 'MDH Deggi Mirch', amountPaise: 51450),
+      ];
+      final groups = groupHyperpureItemsByCategory(items);
+      // Groups are sorted by total desc.
+      expect(groups.first.category, 'Oil');
+      expect(groups.first.totalPaise, 289000 + 19005);
+      expect(groups.first.items.length, 2);
+      // Dairy has paneer + cheese.
+      final dairy = groups.firstWhere((g) => g.category == 'Dairy');
+      expect(dairy.totalPaise, 148000 + 50190);
+      // Sum across groups equals sum of items.
+      final total = groups.fold<int>(0, (s, g) => s + g.totalPaise);
+      final itemSum =
+          items.fold<int>(0, (s, i) => s + i.amountPaise);
+      expect(total, itemSum);
+    });
+
+    test('empty items list returns empty groups (no crash)', () {
+      expect(groupHyperpureItemsByCategory(const []), isEmpty);
+    });
+  });
+
   test(
       'strict amount rule: PIN codes and HSN codes are never captured '
       'as amounts', () {

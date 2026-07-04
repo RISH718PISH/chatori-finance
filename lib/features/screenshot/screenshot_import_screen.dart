@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import '../../core/money.dart';
 import '../transaction/add_transaction_screen.dart';
 import 'hyperpure_parser.dart';
+import 'hyperpure_split_screen.dart';
 import 'paytm_parser.dart';
 
 class ScreenshotImportScreen extends StatefulWidget {
@@ -74,6 +75,17 @@ class _ScreenshotImportScreenState extends State<ScreenshotImportScreen> {
         attachmentLocalPath: _imagePath,
       ),
     );
+  }
+
+  void _splitHyperpure() {
+    final h = _hyperpure;
+    if (h == null) return;
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => HyperpureSplitScreen(
+        parsed: h,
+        attachmentLocalPath: _imagePath,
+      ),
+    ));
   }
 
   void _reviewHyperpure() {
@@ -232,14 +244,34 @@ class _ScreenshotImportScreenState extends State<ScreenshotImportScreen> {
         const SizedBox(height: 8),
         _rawText(context, h.rawText),
         const SizedBox(height: 12),
-        FilledButton.icon(
-          onPressed: _reviewHyperpure,
-          icon: const Icon(Icons.check),
-          label: const Text('Review & save'),
-        ),
+        // Auto-split is offered whenever items land in 2+ categories — a
+        // catering kitchen almost never buys just one category, so this is
+        // the main flow for real Hyperpure bills.
+        if (_uniqueCategoryCount(h) >= 2) ...[
+          FilledButton.icon(
+            onPressed: _splitHyperpure,
+            icon: const Icon(Icons.call_split),
+            label: Text(
+                'Split into ${_uniqueCategoryCount(h)} categories & save'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _reviewHyperpure,
+            icon: const Icon(Icons.merge_type),
+            label: const Text('Save as one entry instead'),
+          ),
+        ] else
+          FilledButton.icon(
+            onPressed: _reviewHyperpure,
+            icon: const Icon(Icons.check),
+            label: const Text('Review & save'),
+          ),
       ],
     );
   }
+
+  int _uniqueCategoryCount(ParsedHyperpure h) =>
+      groupHyperpureItemsByCategory(h.items).length;
 
   Widget _itemRow(BuildContext context, HyperpureLineItem it) {
     final qtyUnit = [

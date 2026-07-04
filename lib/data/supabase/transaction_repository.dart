@@ -79,6 +79,54 @@ class TransactionRepository {
     await _client.from('transactions').delete().eq('id', id);
   }
 
+  /// Inserts many rows in one call — used when splitting a single Hyperpure
+  /// bill across categories. All rows share the same party, date, event,
+  /// attachment; only category + amountPaise (+ optional per-row notes)
+  /// differ. Fewer round-trips, one atomic write.
+  Future<void> addBatch({
+    required String businessId,
+    required List<({
+      String category,
+      int amountPaise,
+      String? notes,
+    })> rows,
+    required String type,
+    required String paymentMode,
+    DateTime? occurredAt,
+    String? partyName,
+    String? tag,
+    String source = 'manual',
+    String? eventId,
+    String? attachmentPath,
+    int? cashPaise,
+    int? upiPaise,
+  }) async {
+    if (rows.isEmpty) return;
+    final createdBy = _client.auth.currentUser?.id;
+    final when = (occurredAt ?? DateTime.now()).toUtc().toIso8601String();
+    final payload = [
+      for (final r in rows)
+        {
+          'business_id': businessId,
+          'type': type,
+          'category': r.category,
+          'amount_paise': r.amountPaise,
+          'occurred_at': when,
+          'payment_mode': paymentMode,
+          'party_name': partyName,
+          'notes': r.notes,
+          'tag': tag,
+          'source': source,
+          'event_id': eventId,
+          'attachment_path': attachmentPath,
+          'cash_paise': cashPaise,
+          'upi_paise': upiPaise,
+          'created_by': createdBy,
+        },
+    ];
+    await _client.from('transactions').insert(payload);
+  }
+
   /// Duplicate detection: any transactions matching amount + party on the same
   /// calendar day (excluding [excludeId]).
   Future<List<Txn>> findDuplicates({

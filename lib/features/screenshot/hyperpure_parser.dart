@@ -485,32 +485,70 @@ class HyperpureParser {
     return false;
   }
 
-  // ── Suggested category ────────────────────────────────────────────
-  static String _suggestedCategory(String text, List<HyperpureLineItem> items) {
-    final haystack =
-        '$text ${items.map((i) => i.description).join(' ')}'.toLowerCase();
-    const keywordMap = <String, List<String>>{
-      'Oil': ['oil', 'sunflower', 'mustard', 'refined', 'sesame'],
-      'Meat & Poultry': ['chicken', 'mutton', 'fish', 'egg', 'meat'],
-      'Dairy': ['paneer', 'milk', 'butter', 'cream', 'cheese', 'curd', 'ghee',
-          'mozzarella', 'cheddar', 'fat spread'],
-      'Fruits': ['apple', 'banana', 'mango', 'orange', 'papaya', 'watermelon'],
-      'Spices & Masalas': ['masala', 'garam', 'haldi', 'jeera', 'dhania',
-          'chilli powder', 'turmeric', 'cardamom', 'elaichi', 'mirch'],
-      'Grains & Flour': ['atta', 'maida', 'rice', 'basmati', 'dal', 'besan',
-          'suji', 'flour', 'rava', 'penne', 'pasta', 'sugar'],
-      'Bakery & Sweets': ['bread', 'bun', 'pav', 'cake', 'pastry', 'mithai'],
-      'Beverages': ['juice', 'cola', 'pepsi', 'sprite', 'thums up', 'soda'],
-      'Water Bottles': ['bisleri', 'aquafina', 'kinley', 'water bottle'],
-      'Veggies': ['onion', 'tomato', 'potato', 'vegetable', 'coriander',
-          'ginger', 'garlic', 'green chilli', 'mushroom'],
-      'Packaging': ['container', 'box', 'pouch', 'packaging', 'cling film',
-          'aluminium foil', 'foil'],
-      'Disposables & Cutlery': ['plate', 'spoon', 'fork', 'tissue', 'napkin'],
-    };
+  // ── Category classification ─────────────────────────────────────
+  /// Keyword map used to categorize BOTH the whole-bill fallback AND each
+  /// individual line item. Extended for Hyperpure vocabulary: pulses,
+  /// convenience-fee, etc.
+  static const Map<String, List<String>> _categoryKeywords = {
+    'Oil':
+        ['oil', 'sunflower', 'mustard', 'refined', 'sesame', 'til', 'palm'],
+    'Meat & Poultry': ['chicken', 'mutton', 'fish', 'egg', 'meat', 'lamb'],
+    'Dairy': [
+      'paneer', 'milk', 'butter', 'cream', 'cheese', 'curd', 'ghee',
+      'mozzarella', 'cheddar', 'fat spread', 'nutralite', 'khoya', 'malai',
+    ],
+    'Fruits': [
+      'apple', 'banana', 'mango', 'orange', 'papaya', 'watermelon',
+      'strawberry', 'grape', 'pomegranate', 'kiwi',
+    ],
+    'Spices & Masalas': [
+      'masala', 'garam', 'haldi', 'jeera', 'dhania', 'chilli powder',
+      'turmeric', 'cardamom', 'elaichi', 'mirch', 'clove', 'cinnamon',
+      'pepper', 'coriander seed', 'mustard seed', 'saunf', 'ajwain', 'mdh',
+      'everest', 'hing', 'kasuri methi', 'bay leaf',
+    ],
+    'Grains & Flour': [
+      'atta', 'maida', 'rice', 'basmati', 'dal', 'besan', 'suji', 'flour',
+      'rava', 'penne', 'pasta', 'sugar', 'poha', 'noodle', 'macaroni',
+      'chana', 'moong', 'toor', 'urad', 'masoor', 'rajma', 'kabuli',
+      'lentil', 'pulse',
+    ],
+    'Bakery & Sweets': [
+      'bread', 'bun', 'pav', 'cake', 'pastry', 'mithai', 'biscuit',
+      'cookie', 'muffin', 'croissant',
+    ],
+    'Beverages': [
+      'juice', 'cola', 'pepsi', 'sprite', 'thums up', 'soda', 'tea',
+      'coffee', 'nescafe', 'red bull',
+    ],
+    'Water Bottles': ['bisleri', 'aquafina', 'kinley', 'water bottle'],
+    'Veggies': [
+      'onion', 'tomato', 'potato', 'vegetable', 'coriander', 'ginger',
+      'garlic', 'green chilli', 'mushroom', 'cabbage', 'cauliflower',
+      'brinjal', 'capsicum', 'lauki', 'karela', 'bhindi', 'palak',
+      'spinach', 'lettuce', 'cucumber', 'lemon', 'nimbu', 'magaz tumba',
+    ],
+    'Packaging': [
+      'container', 'box', 'pouch', 'packaging', 'cling film',
+      'aluminium foil', 'foil', 'wrap', 'homefoil',
+    ],
+    'Disposables & Cutlery': [
+      'plate', 'spoon', 'fork', 'tissue', 'napkin', 'cup', 'straw',
+    ],
+    'Miscellaneous': [
+      'convenience', 'delivery fee', 'service charge', 'round off',
+    ],
+  };
+
+  /// Maps a single line item to its category using keyword hits. Falls back
+  /// to 'Groceries' when nothing distinctive matches.
+  static String categoryOfItem(HyperpureLineItem item) =>
+      _bestCategory(item.description.toLowerCase());
+
+  static String _bestCategory(String haystack) {
     String bestCat = 'Groceries';
     var bestHits = 0;
-    keywordMap.forEach((cat, words) {
+    _categoryKeywords.forEach((cat, words) {
       final hits = words.where(haystack.contains).length;
       if (hits > bestHits) {
         bestHits = hits;
@@ -519,4 +557,42 @@ class HyperpureParser {
     });
     return bestCat;
   }
+
+  static String _suggestedCategory(String text, List<HyperpureLineItem> items) {
+    return _bestCategory(
+        '$text ${items.map((i) => i.description).join(' ')}'.toLowerCase());
+  }
+}
+
+/// One category slice of a Hyperpure bill after auto-splitting.
+class HyperpureCategoryGroup {
+  final String category;
+  final List<HyperpureLineItem> items;
+  final int totalPaise;
+  const HyperpureCategoryGroup({
+    required this.category,
+    required this.items,
+    required this.totalPaise,
+  });
+}
+
+/// Groups line items by their auto-detected category. Result is sorted by
+/// total desc (biggest bucket first) so the user sees the important ones
+/// on top of the review screen.
+List<HyperpureCategoryGroup> groupHyperpureItemsByCategory(
+    List<HyperpureLineItem> items) {
+  final map = <String, List<HyperpureLineItem>>{};
+  for (final it in items) {
+    final cat = HyperpureParser.categoryOfItem(it);
+    map.putIfAbsent(cat, () => []).add(it);
+  }
+  final groups = map.entries
+      .map((e) => HyperpureCategoryGroup(
+            category: e.key,
+            items: e.value,
+            totalPaise: e.value.fold<int>(0, (s, it) => s + it.amountPaise),
+          ))
+      .toList();
+  groups.sort((a, b) => b.totalPaise.compareTo(a.totalPaise));
+  return groups;
 }

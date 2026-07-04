@@ -56,8 +56,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "1.19"
+          name: "1.20"
           body: |
-            Chatori Finance **1.19** — Hyperpure parser rewrite: no more PIN codes / order numbers captured as amounts, table sections properly bounded.
+            Chatori Finance **1.20** — Hyperpure bills auto-split across multiple expense categories (Oil, Dairy, Spices, Grains, Packaging…) with a review-then-save-all flow.
             Download **app-release.apk** below and install it on your phone.
           files: build/app/outputs/flutter-apk/app-release.apk

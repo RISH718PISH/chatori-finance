@@ -56,8 +56,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "1.17"
+          name: "1.18"
           body: |
-            Chatori Finance **1.17** — 12 new catering-specific expense categories (Meat, Spices, Grains, Bakery, Fruits, Beverages, Water, Disposables, Event Labor, Rentals, Décor, Event Transport).
+            Chatori Finance **1.18** — Hyperpure line-item OCR, weekly stats on Home, pie chart accuracy fix, calendar-correct event sections, Cash+UPI split payment mode.
             Download **app-release.apk** below and install it on your phone.
+
+            **⚠️ Backend step** — before installing, run the two `alter table` lines from `supabase/schema.sql` in your Supabase SQL Editor (adds cash_paise + upi_paise columns). Safe to re-run the whole schema; it's idempotent.
           files: build/app/outputs/flutter-apk/app-release.apk

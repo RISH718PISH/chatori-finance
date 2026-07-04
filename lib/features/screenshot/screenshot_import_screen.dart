@@ -79,6 +79,22 @@ class _ScreenshotImportScreenState extends State<ScreenshotImportScreen> {
   void _reviewHyperpure() {
     final h = _hyperpure;
     if (h == null) return;
+    // Build a compact note: invoice # + tax breakdown + up to 5 line items.
+    final noteParts = <String>[
+      h.invoiceNumber == null ? 'Hyperpure invoice' : 'Hyperpure invoice ${h.invoiceNumber}',
+      if (h.taxablePaise != null) 'Taxable ${Money.format(h.taxablePaise!)}',
+      if (h.taxPaise != null) 'Tax ${Money.format(h.taxPaise!)}',
+    ];
+    if (h.items.isNotEmpty) {
+      final top = h.items.take(5).map((it) {
+        final qty = it.quantity == null
+            ? ''
+            : ' ${it.quantity! % 1 == 0 ? it.quantity!.toInt() : it.quantity}';
+        return '• ${it.description}$qty — ${Money.format(it.amountPaise)}';
+      }).join('\n');
+      noteParts.add(top);
+      if (h.items.length > 5) noteParts.add('… +${h.items.length - 5} more');
+    }
     context.push(
       '/add',
       extra: AddPrefill(
@@ -88,9 +104,7 @@ class _ScreenshotImportScreenState extends State<ScreenshotImportScreen> {
         party: 'Hyperpure',
         paymentMode: 'Bank',
         occurredAt: h.invoiceDate,
-        notes: h.invoiceNumber == null
-            ? 'Hyperpure invoice'
-            : 'Hyperpure invoice ${h.invoiceNumber}',
+        notes: noteParts.join('\n'),
         fromScreenshot: true,
         attachmentLocalPath: _imagePath,
       ),
@@ -145,6 +159,7 @@ class _ScreenshotImportScreenState extends State<ScreenshotImportScreen> {
   }
 
   Widget _hyperpureResult(BuildContext context, ParsedHyperpure h) {
+    final missingTotal = h.totalPaise == null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -166,19 +181,54 @@ class _ScreenshotImportScreenState extends State<ScreenshotImportScreen> {
                   ],
                 ),
                 const Divider(),
+                _row('Vendor', h.vendorName),
                 _row('Invoice', h.invoiceNumber ?? '—'),
-                _row('Date',
+                _row(
+                    'Date',
                     h.invoiceDate != null
                         ? DateFormat('d MMM yyyy').format(h.invoiceDate!)
                         : 'today'),
+                _row('Taxable',
+                    h.taxablePaise != null ? Money.format(h.taxablePaise!) : '—'),
+                _row('Tax (GST)',
+                    h.taxPaise != null ? Money.format(h.taxPaise!) : '—'),
                 _row('Total',
                     h.totalPaise != null ? Money.format(h.totalPaise!) : '—'),
                 _row('Category', h.suggestedCategory),
                 _row('Payment', 'Bank (editable)'),
+                if (missingTotal)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Couldn\'t read the total — edit on the next screen.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.error),
+                    ),
+                  ),
               ],
             ),
           ),
         ),
+        if (h.items.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                    child: Text('Items (${h.items.length})',
+                        style: Theme.of(context).textTheme.titleSmall),
+                  ),
+                  const Divider(height: 8),
+                  for (final it in h.items) _itemRow(context, it),
+                ],
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 8),
         _rawText(context, h.rawText),
         const SizedBox(height: 12),
@@ -188,6 +238,34 @@ class _ScreenshotImportScreenState extends State<ScreenshotImportScreen> {
           label: const Text('Review & save'),
         ),
       ],
+    );
+  }
+
+  Widget _itemRow(BuildContext context, HyperpureLineItem it) {
+    final qtyUnit = [
+      if (it.quantity != null) it.quantity!.toStringAsFixed(
+          it.quantity! % 1 == 0 ? 0 : 2),
+      if (it.unitPricePaise != null) '× ${Money.format(it.unitPricePaise!)}',
+    ].join(' ');
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(it.description,
+                    maxLines: 2, overflow: TextOverflow.ellipsis),
+                if (qtyUnit.isNotEmpty)
+                  Text(qtyUnit, style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+          ),
+          Text(Money.format(it.amountPaise),
+              style: const TextStyle(fontWeight: FontWeight.w600)),
+        ],
+      ),
     );
   }
 

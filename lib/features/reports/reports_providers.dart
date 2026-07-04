@@ -22,23 +22,33 @@ class SelectedReportMonth extends Notifier<DateTime> {
 final selectedReportMonthProvider =
     NotifierProvider<SelectedReportMonth, DateTime>(SelectedReportMonth.new);
 
-/// Transactions for the selected report month.
+/// Transactions for the selected report month — DERIVED from
+/// [businessTxnsProvider] so it stays in sync when any entry is added, edited,
+/// or deleted anywhere in the app. Previously we did a separate `fetchForMonth`
+/// call, which caused the Overview pie / P&L / totals to show stale numbers.
 final monthTxnsProvider = FutureProvider.autoDispose<List<Txn>>((ref) async {
-  final biz = await ref.watch(businessIdProvider.future);
-  if (biz == null) return const [];
+  final all = await ref.watch(businessTxnsProvider.future);
   final month = ref.watch(selectedReportMonthProvider);
-  return ref.watch(transactionRepoProvider).fetchForMonth(biz, month);
+  final start = DateTime(month.year, month.month, 1);
+  final end = DateTime(month.year, month.month + 1, 1);
+  return all
+      .where((t) =>
+          !t.occurredAt.isBefore(start) && t.occurredAt.isBefore(end))
+      .toList();
 });
 
 /// Transactions for the month before the selected one (for MoM deltas).
+/// Also derived from [businessTxnsProvider] for the same reason.
 final prevMonthTxnsProvider =
     FutureProvider.autoDispose<List<Txn>>((ref) async {
-  final biz = await ref.watch(businessIdProvider.future);
-  if (biz == null) return const [];
+  final all = await ref.watch(businessTxnsProvider.future);
   final month = ref.watch(selectedReportMonthProvider);
-  return ref
-      .watch(transactionRepoProvider)
-      .fetchForMonth(biz, DateTime(month.year, month.month - 1));
+  final start = DateTime(month.year, month.month - 1, 1);
+  final end = DateTime(month.year, month.month, 1);
+  return all
+      .where((t) =>
+          !t.occurredAt.isBefore(start) && t.occurredAt.isBefore(end))
+      .toList();
 });
 
 /// Structured monthly P&L computed from one month's transactions.
@@ -97,6 +107,8 @@ class MonthlyPl {
 }
 
 /// Sum [txns] into descending buckets keyed by [key], optionally filtered.
+/// Blank / whitespace-only keys are collapsed into a single "Uncategorized"
+/// bucket so the pie doesn't display an invisible slice.
 List<Bucket> bucketize(
   Iterable<Txn> txns,
   String Function(Txn) key, {
@@ -105,9 +117,34 @@ List<Bucket> bucketize(
   final map = <String, int>{};
   for (final t in txns) {
     if (where != null && !where(t)) continue;
-    map.update(key(t), (v) => v + t.amountPaise, ifAbsent: () => t.amountPaise);
+    var k = key(t).trim();
+    if (k.isEmpty) k = 'Uncategorized';
+    map.update(k, (v) => v + t.amountPaise, ifAbsent: () => t.amountPaise);
   }
   final list = map.entries.map((e) => Bucket(e.key, e.value)).toList();
   list.sort((a, b) => b.paise.compareTo(a.paise));
   return list;
+}
+
+/// Percentages for the pie's slice labels. Rounded to whole numbers but
+/// adjusted so they sum to exactly 100 — otherwise the slice labels can
+/// read "34% + 33% + 33% = 100%" while the biggest slice reads 34% but
+/// visually is 34.7% — inconsistent. Returns list matching [buckets] order.
+List<int> percentagesSummingTo100(List<Bucket> buckets, int total) {
+  if (total <= 0 || buckets.isEmpty) {
+    return List<int>.filled(buckets.length, 0);
+  }
+  // Largest-remainder method.
+  final raw = buckets.map((b) => b.paise / total * 100).toList();
+  final floored = raw.map((v) => v.floor()).toList();
+  var deficit = 100 - floored.reduce((a, b) => a + b);
+  final indices = List<int>.generate(buckets.length, (i) => i);
+  // Sort indices by descending fractional part, break ties by original order.
+  indices.sort((a, b) => (raw[b] - floored[b]).compareTo(raw[a] - floored[a]));
+  for (final i in indices) {
+    if (deficit == 0) break;
+    floored[i] += 1;
+    deficit -= 1;
+  }
+  return floored;
 }

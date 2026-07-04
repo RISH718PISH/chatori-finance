@@ -82,6 +82,8 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
       _tag = e.tag;
       _date = e.occurredAt;
       _eventId = e.eventId;
+      _cashSplitPaise = e.cashPaise ?? 0;
+      _upiSplitPaise = e.upiPaise ?? 0;
       // Pre-select the category — resolved once `kSeedCategories` is available.
       final match = kSeedCategories
           .where((c) => c.kind == e.type && c.name == e.category)
@@ -109,6 +111,8 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   String _paymentMode = 'Cash';
   String? _tag;
   String? _eventId;
+  int _cashSplitPaise = 0;
+  int _upiSplitPaise = 0;
   final _partyController = TextEditingController();
   final _noteController = TextEditingController();
   DateTime _date = DateTime.now();
@@ -116,7 +120,16 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   bool _saving = false;
 
   bool get _isIncome => _type == 'income';
-  bool get _canSave => _amountPaise > 0 && _category != null;
+  bool get _isSplit => _paymentMode == kPaymentModeSplit;
+
+  /// Split is valid when both parts are positive and sum exactly to the total.
+  bool get _splitValid =>
+      _cashSplitPaise > 0 &&
+      _upiSplitPaise > 0 &&
+      (_cashSplitPaise + _upiSplitPaise) == _amountPaise;
+
+  bool get _canSave =>
+      _amountPaise > 0 && _category != null && (!_isSplit || _splitValid);
 
   @override
   void dispose() {
@@ -125,11 +138,27 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     super.dispose();
   }
 
-  void _press(int digit) => setState(
-      () => _amountPaise = (_amountPaise * 10 + digit).clamp(0, 9999999999));
-  void _pressDouble() =>
-      setState(() => _amountPaise = (_amountPaise * 100).clamp(0, 9999999999));
-  void _backspace() => setState(() => _amountPaise ~/= 10);
+  void _press(int digit) => setState(() {
+        _amountPaise = (_amountPaise * 10 + digit).clamp(0, 9999999999);
+        _reconcileSplitToTotal();
+      });
+  void _pressDouble() => setState(() {
+        _amountPaise = (_amountPaise * 100).clamp(0, 9999999999);
+        _reconcileSplitToTotal();
+      });
+  void _backspace() => setState(() {
+        _amountPaise ~/= 10;
+        _reconcileSplitToTotal();
+      });
+
+  /// Keeps cash + upi in step with a changed total. Preserves whatever the
+  /// user typed for UPI (their explicit intent) and adjusts Cash to close the
+  /// gap. If UPI already exceeds the total, we clamp UPI down instead.
+  void _reconcileSplitToTotal() {
+    if (!_isSplit) return;
+    if (_upiSplitPaise > _amountPaise) _upiSplitPaise = _amountPaise;
+    _cashSplitPaise = _amountPaise - _upiSplitPaise;
+  }
 
   void _switchType(String t) {
     if (t == _type) return;
@@ -237,6 +266,8 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
           notes: notes,
           tag: _tag,
           eventId: _eventId,
+          cashPaise: _isSplit ? _cashSplitPaise : null,
+          upiPaise: _isSplit ? _upiSplitPaise : null,
         );
       } else {
         // Persist the scanned bill (if any) before inserting the entry.
@@ -260,6 +291,8 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
           source: _source,
           eventId: _eventId,
           attachmentPath: attachmentPath,
+          cashPaise: _isSplit ? _cashSplitPaise : null,
+          upiPaise: _isSplit ? _upiSplitPaise : null,
         );
       }
       if (!mounted) return;
@@ -361,10 +394,33 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                       ChoiceChip(
                         label: Text(mode),
                         selected: _paymentMode == mode,
-                        onSelected: (_) => setState(() => _paymentMode = mode),
+                        onSelected: (_) => setState(() {
+                          _paymentMode = mode;
+                          if (!_isSplit) {
+                            _cashSplitPaise = 0;
+                            _upiSplitPaise = 0;
+                          } else {
+                            // Sensible default: give all to Cash so the user
+                            // just types the UPI part and Cash auto-adjusts.
+                            _cashSplitPaise = _amountPaise;
+                            _upiSplitPaise = 0;
+                          }
+                        }),
                       ),
                   ],
                 ),
+                if (_isSplit) ...[
+                  const SizedBox(height: 12),
+                  _SplitFields(
+                    total: _amountPaise,
+                    cash: _cashSplitPaise,
+                    upi: _upiSplitPaise,
+                    onChanged: (cash, upi) => setState(() {
+                      _cashSplitPaise = cash;
+                      _upiSplitPaise = upi;
+                    }),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 _SectionLabel(_isIncome ? 'Customer / party' : 'Vendor / person'),
                 TextField(
@@ -804,6 +860,120 @@ class _AttachmentThumb extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// Cash + UPI split entry. The user types the UPI amount; Cash auto-fills the
+/// remainder so the row's sum always equals the transaction total. Save is
+/// blocked (in the parent) if either part is zero or the sum drifts.
+class _SplitFields extends StatefulWidget {
+  const _SplitFields({
+    required this.total,
+    required this.cash,
+    required this.upi,
+    required this.onChanged,
+  });
+  final int total;
+  final int cash;
+  final int upi;
+  final void Function(int cash, int upi) onChanged;
+
+  @override
+  State<_SplitFields> createState() => _SplitFieldsState();
+}
+
+class _SplitFieldsState extends State<_SplitFields> {
+  late final TextEditingController _upiCtl = TextEditingController(
+      text: widget.upi > 0 ? (widget.upi / 100).toStringAsFixed(2) : '');
+
+  @override
+  void didUpdateWidget(_SplitFields old) {
+    super.didUpdateWidget(old);
+    // If a keypad change auto-adjusted the split, keep the UPI field in sync
+    // (but avoid re-rendering while the user is typing).
+    final expected = widget.upi > 0
+        ? (widget.upi / 100).toStringAsFixed(2)
+        : '';
+    if (expected != _upiCtl.text &&
+        (double.tryParse(_upiCtl.text) ?? 0) * 100 != widget.upi) {
+      _upiCtl.text = expected;
+    }
+  }
+
+  @override
+  void dispose() {
+    _upiCtl.dispose();
+    super.dispose();
+  }
+
+  void _onUpiChanged(String s) {
+    final rupees = double.tryParse(s.trim()) ?? 0;
+    var upiPaise = (rupees * 100).round();
+    if (upiPaise < 0) upiPaise = 0;
+    if (upiPaise > widget.total) upiPaise = widget.total;
+    widget.onChanged(widget.total - upiPaise, upiPaise);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final diff = widget.total - widget.cash - widget.upi;
+    final ok = widget.cash > 0 && widget.upi > 0 && diff == 0;
+    final color = ok
+        ? AppSemantics.income
+        : (widget.total == 0 ? Colors.grey : AppSemantics.warning);
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _upiCtl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'UPI amount',
+                    prefixText: '₹ ',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  onChanged: _onUpiChanged,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Cash (auto)',
+                    prefixText: '₹ ',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  child: Text(
+                    widget.total == 0
+                        ? '0.00'
+                        : (widget.cash / 100).toStringAsFixed(2),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            widget.total == 0
+                ? 'Enter the total first, then set UPI amount.'
+                : ok
+                    ? 'Split matches total ✓'
+                    : diff > 0
+                        ? 'Split short by ${Money.format(diff)}'
+                        : 'Split over by ${Money.format(diff.abs())}',
+            style: TextStyle(fontSize: 12, color: color),
+          ),
+        ],
+      ),
     );
   }
 }

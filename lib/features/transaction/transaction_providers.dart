@@ -48,15 +48,54 @@ final recentTransactionsProvider =
       .whenData((all) => all.take(12).toList());
 });
 
-/// Income/expense totals for today (derived).
+/// Start of the day for [t] in local time (midnight).
+DateTime _startOfDay(DateTime t) => DateTime(t.year, t.month, t.day);
+
+/// Monday of the calendar week containing [t] (local time).
+DateTime _startOfWeek(DateTime t) {
+  final d = _startOfDay(t);
+  // DateTime.weekday: Mon=1..Sun=7
+  return d.subtract(Duration(days: d.weekday - 1));
+}
+
+/// Income/expense totals for today (local-time, timezone-safe).
 final todayTotalsProvider = Provider<Totals>((ref) {
   final all = ref.watch(businessTxnsProvider).asData?.value ?? const [];
+  final start = _startOfDay(DateTime.now());
+  final end = start.add(const Duration(days: 1));
+  return Totals.fromTxns(all.where((t) =>
+      !t.occurredAt.isBefore(start) && t.occurredAt.isBefore(end)));
+});
+
+/// Weekly totals for THIS calendar week (Mon → now) plus the delta vs
+/// the SAME slice of the previous week (Mon → same weekday & time last week).
+/// Comparing "same day of the week" is a fairer trend signal than comparing
+/// a partial week to a full one.
+class WeeklyTotals {
+  final Totals current;
+  final Totals previous;
+  const WeeklyTotals(this.current, this.previous);
+
+  int get netDelta => current.netPaise - previous.netPaise;
+  int get incomeDelta => current.incomePaise - previous.incomePaise;
+  int get expenseDelta => current.expensePaise - previous.expensePaise;
+}
+
+final weekTotalsProvider = Provider<WeeklyTotals>((ref) {
+  final all = ref.watch(businessTxnsProvider).asData?.value ?? const [];
   final now = DateTime.now();
-  final todays = all.where((t) =>
-      t.occurredAt.year == now.year &&
-      t.occurredAt.month == now.month &&
-      t.occurredAt.day == now.day);
-  return Totals.fromTxns(todays);
+  final thisWeekStart = _startOfWeek(now);
+  final prevWeekStart = thisWeekStart.subtract(const Duration(days: 7));
+  // "So far this week" = Mon→now; comparison = Mon→now-7d.
+  final currentEnd = now;
+  final previousEnd = now.subtract(const Duration(days: 7));
+  bool inRange(Txn t, DateTime start, DateTime end) =>
+      !t.occurredAt.isBefore(start) && !t.occurredAt.isAfter(end);
+  final current = Totals.fromTxns(
+      all.where((t) => inRange(t, thisWeekStart, currentEnd)));
+  final previous = Totals.fromTxns(
+      all.where((t) => inRange(t, prevWeekStart, previousEnd)));
+  return WeeklyTotals(current, previous);
 });
 
 /// Call after adding / editing / deleting a transaction.

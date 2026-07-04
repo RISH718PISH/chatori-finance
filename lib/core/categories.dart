@@ -111,8 +111,19 @@ PlSection plSectionFor(String categoryName, {required bool isIncome}) {
   return isIncome ? PlSection.revenue : PlSection.operating;
 }
 
-/// Payment modes (PRD 9.2 / 9.3).
-const List<String> kPaymentModes = ['Cash', 'UPI', 'Paytm', 'Bank', 'Other'];
+/// Payment modes (PRD 9.2 / 9.3). "Cash+UPI" is a split: the transaction's
+/// amount is divided between cash_paise and upi_paise columns; the two must
+/// sum to amount_paise. Reports treat the row as one entry but split its
+/// value between Cash and Digital buckets.
+const kPaymentModeSplit = 'Cash+UPI';
+const List<String> kPaymentModes = [
+  'Cash',
+  'UPI',
+  kPaymentModeSplit,
+  'Paytm',
+  'Bank',
+  'Other',
+];
 
 /// Business tags (PRD 12.1).
 const List<String> kTags = ['Catering', 'Cloud Kitchen', 'Event', 'Other'];

@@ -14,6 +14,7 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final totals = ref.watch(todayTotalsProvider);
+    final weekly = ref.watch(weekTotalsProvider);
     final recent = ref.watch(recentTransactionsProvider);
 
     return Scaffold(
@@ -62,6 +63,42 @@ class HomeScreen extends ConsumerWidget {
             color: totals.netPaise >= 0
                 ? AppSemantics.income
                 : AppSemantics.expense,
+            wide: true,
+          ),
+
+          // --- This week ---
+          const SizedBox(height: 20),
+          Text('This week (Mon–today)',
+              style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _SummaryCard(
+                label: 'Income',
+                value: Money.format(weekly.current.incomePaise, decimals: false),
+                color: AppSemantics.income,
+                delta: weekly.incomeDelta,
+                deltaUpIsGood: true,
+              ),
+              const SizedBox(width: 12),
+              _SummaryCard(
+                label: 'Expenses',
+                value: Money.format(weekly.current.expensePaise, decimals: false),
+                color: AppSemantics.expense,
+                delta: weekly.expenseDelta,
+                deltaUpIsGood: false,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _SummaryCard(
+            label: 'Net this week',
+            value: Money.format(weekly.current.netPaise, decimals: false),
+            color: weekly.current.netPaise >= 0
+                ? AppSemantics.income
+                : AppSemantics.expense,
+            delta: weekly.netDelta,
+            deltaUpIsGood: true,
             wide: true,
           ),
           const SizedBox(height: 20),
@@ -155,12 +192,21 @@ class _SummaryCard extends StatelessWidget {
     required this.value,
     required this.color,
     this.wide = false,
+    this.delta,
+    this.deltaUpIsGood = true,
   });
 
   final String label;
   final String value;
   final Color color;
   final bool wide;
+
+  /// Optional Δ vs comparison period (in paise). When null, no trend shown.
+  final int? delta;
+
+  /// If true, a positive delta reads as good (income/net); if false, a
+  /// positive delta reads as bad (expenses).
+  final bool deltaUpIsGood;
 
   @override
   Widget build(BuildContext context) {
@@ -173,11 +219,42 @@ class _SummaryCard extends StatelessWidget {
             LabelUpper(label),
             const SizedBox(height: 8),
             DataNumber(value, size: DataSize.lg, color: color),
+            if (delta != null && delta != 0) ...[
+              const SizedBox(height: 6),
+              _DeltaChip(deltaPaise: delta!, upIsGood: deltaUpIsGood),
+            ],
           ],
         ),
       ),
     );
     return wide ? card : Expanded(child: card);
+  }
+}
+
+class _DeltaChip extends StatelessWidget {
+  const _DeltaChip({required this.deltaPaise, required this.upIsGood});
+  final int deltaPaise;
+  final bool upIsGood;
+
+  @override
+  Widget build(BuildContext context) {
+    final up = deltaPaise > 0;
+    final good = up == upIsGood;
+    final color = good ? AppSemantics.income : AppSemantics.expense;
+    return Row(
+      children: [
+        Icon(up ? Icons.arrow_upward : Icons.arrow_downward,
+            size: 14, color: color),
+        const SizedBox(width: 2),
+        Text(
+          Money.format(deltaPaise.abs(), decimals: false),
+          style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(width: 4),
+        Text('vs last week',
+            style: Theme.of(context).textTheme.bodySmall),
+      ],
+    );
   }
 }
 

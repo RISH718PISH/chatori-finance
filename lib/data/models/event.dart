@@ -42,3 +42,43 @@ String nextEventStatus(String current) {
   final i = kEventStatuses.indexOf(current);
   return kEventStatuses[(i + 1) % kEventStatuses.length];
 }
+
+/// Where an event should appear on the list screen, derived from the
+/// stored [status] AND the event date compared to *today* (local time).
+///
+/// Rules:
+/// - settled → always Past
+/// - done → always Past (event happened; financials may still be open)
+/// - upcoming + date is today → Due today
+/// - upcoming + date is future → Upcoming
+/// - upcoming + date already passed → **Past** (auto-moved out of Upcoming so
+///   an event dated yesterday doesn't sit in Upcoming forever)
+enum EventSection { dueToday, upcoming, past }
+
+EventSection eventSectionOf(Event e, {DateTime? now}) {
+  if (e.status == 'settled' || e.status == 'done') return EventSection.past;
+  final n = now ?? DateTime.now();
+  final today = DateTime(n.year, n.month, n.day);
+  final d = DateTime(e.eventDate.year, e.eventDate.month, e.eventDate.day);
+  if (d.isAtSameMomentAs(today)) return EventSection.dueToday;
+  if (d.isBefore(today)) return EventSection.past;
+  return EventSection.upcoming;
+}
+
+/// Sort events for display within their section:
+/// - Due today: ascending by time (earliest first — you're likely working now)
+/// - Upcoming: ascending by date (nearest first)
+/// - Past: descending by date (most recent first)
+int compareEventsForSection(Event a, Event b, EventSection section) {
+  final byDateAsc = a.eventDate.compareTo(b.eventDate);
+  final byDateDesc = -byDateAsc;
+  switch (section) {
+    case EventSection.dueToday:
+    case EventSection.upcoming:
+      if (byDateAsc != 0) return byDateAsc;
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    case EventSection.past:
+      if (byDateDesc != 0) return byDateDesc;
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+  }
+}

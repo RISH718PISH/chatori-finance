@@ -21,6 +21,8 @@ class TransactionRepository {
     String source = 'manual',
     String? eventId,
     String? attachmentPath,
+    int? cashPaise,
+    int? upiPaise,
   }) async {
     await _client.from('transactions').insert({
       'business_id': businessId,
@@ -35,6 +37,8 @@ class TransactionRepository {
       'source': source,
       'event_id': eventId,
       'attachment_path': attachmentPath,
+      'cash_paise': cashPaise,
+      'upi_paise': upiPaise,
       'created_by': _client.auth.currentUser?.id,
     });
   }
@@ -50,6 +54,8 @@ class TransactionRepository {
     String? notes,
     String? tag,
     String? eventId,
+    int? cashPaise,
+    int? upiPaise,
   }) async {
     await _client.from('transactions').update({
       'type': type,
@@ -61,6 +67,10 @@ class TransactionRepository {
       'notes': notes,
       'tag': tag,
       'event_id': eventId,
+      // When editing to a non-split mode we clear the split columns, else set
+      // them explicitly. This keeps the invariant tight.
+      'cash_paise': cashPaise,
+      'upi_paise': upiPaise,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', id);
   }
@@ -95,19 +105,9 @@ class TransactionRepository {
     return rows.map(Txn.fromJson).toList();
   }
 
-  /// All transactions in a given month (for reports).
-  Future<List<Txn>> fetchForMonth(String businessId, DateTime month) async {
-    final start = DateTime(month.year, month.month, 1);
-    final end = DateTime(month.year, month.month + 1, 1);
-    final rows = await _client
-        .from('transactions')
-        .select()
-        .eq('business_id', businessId)
-        .gte('occurred_at', start.toUtc().toIso8601String())
-        .lt('occurred_at', end.toUtc().toIso8601String())
-        .order('occurred_at', ascending: false);
-    return rows.map(Txn.fromJson).toList();
-  }
+  // Note: `fetchForMonth` was removed. Report screens now derive month/prev
+  // slices from businessTxnsProvider so refreshing one place invalidates
+  // Reports too. See `monthTxnsProvider` in reports_providers.dart.
 
   /// Recent transactions for a business (newest first). Cached one-shot fetch;
   /// refreshed after mutations and on pull-to-refresh.

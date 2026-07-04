@@ -222,3 +222,12 @@ create policy attachments_member_rw on storage.objects
     and (storage.foldername(name))[1] in
         (select public.my_business_ids()::text)
   );
+
+-- ─────────────────────────────────────────────────────────────
+-- 7. Split-payment columns on transactions. Used only when
+--    payment_mode = 'Cash+UPI'. Both must sum to amount_paise.
+-- ─────────────────────────────────────────────────────────────
+alter table public.transactions
+  add column if not exists cash_paise bigint;
+alter table public.transactions
+  add column if not exists upi_paise bigint;

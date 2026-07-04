@@ -43,10 +43,28 @@ class EventsScreen extends ConsumerWidget {
               ),
             );
           }
-          final upcoming =
-              events.where((e) => e.status == 'upcoming').toList();
-          final done = events.where((e) => e.status == 'done').toList();
-          final settled = events.where((e) => e.status == 'settled').toList();
+          // Sections are derived from date + status combined, so an
+          // "upcoming" event whose date has already passed no longer stays
+          // in Upcoming — it moves to Past automatically.
+          final dueToday = <Event>[];
+          final upcoming = <Event>[];
+          final past = <Event>[];
+          for (final e in events) {
+            switch (eventSectionOf(e)) {
+              case EventSection.dueToday:
+                dueToday.add(e);
+              case EventSection.upcoming:
+                upcoming.add(e);
+              case EventSection.past:
+                past.add(e);
+            }
+          }
+          dueToday.sort((a, b) =>
+              compareEventsForSection(a, b, EventSection.dueToday));
+          upcoming.sort((a, b) =>
+              compareEventsForSection(a, b, EventSection.upcoming));
+          past.sort((a, b) =>
+              compareEventsForSection(a, b, EventSection.past));
           return RefreshIndicator(
             onRefresh: () async {
               refreshEvents(ref);
@@ -59,17 +77,17 @@ class EventsScreen extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
               physics: const AlwaysScrollableScrollPhysics(),
               children: [
+                if (dueToday.isNotEmpty) ...[
+                  const _SectionHeader('Due today'),
+                  for (final e in dueToday) _EventTile(event: e),
+                ],
                 if (upcoming.isNotEmpty) ...[
                   const _SectionHeader('Upcoming'),
                   for (final e in upcoming) _EventTile(event: e),
                 ],
-                if (done.isNotEmpty) ...[
-                  const _SectionHeader('Done'),
-                  for (final e in done) _EventTile(event: e),
-                ],
-                if (settled.isNotEmpty) ...[
-                  const _SectionHeader('Settled'),
-                  for (final e in settled) _EventTile(event: e),
+                if (past.isNotEmpty) ...[
+                  const _SectionHeader('Past'),
+                  for (final e in past) _EventTile(event: e),
                 ],
               ],
             ),

@@ -333,11 +333,16 @@ class _Report extends StatelessWidget {
         txns, (t) => t.partyName ?? 'Unspecified',
         where: (t) => !t.isIncome && (t.partyName?.isNotEmpty ?? false));
 
-    int modeSum(bool cash) => txns
-        .where((t) => !t.isIncome && (t.paymentMode == 'Cash') == cash)
-        .fold<int>(0, (s, t) => s + t.amountPaise);
-    final cash = modeSum(true);
-    final digital = modeSum(false);
+    // A "Cash+UPI" split contributes to BOTH cash and digital totals — this
+    // is why we now derive from cashPortionPaise / digitalPortionPaise on
+    // each Txn rather than the paymentMode label. Pure-Cash / pure-UPI rows
+    // behave the same as before.
+    final cash = txns
+        .where((t) => !t.isIncome)
+        .fold<int>(0, (s, t) => s + t.cashPortionPaise);
+    final digital = txns
+        .where((t) => !t.isIncome)
+        .fold<int>(0, (s, t) => s + t.digitalPortionPaise);
 
     if (txns.isEmpty) {
       return const Center(child: Text('No entries for this month.'));
@@ -435,6 +440,8 @@ class _Pie extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Consistent percentages: sum to exactly 100, slice labels match legend.
+    final pct = percentagesSummingTo100(buckets, total);
     return Column(
       children: [
         SizedBox(
@@ -448,9 +455,7 @@ class _Pie extends StatelessWidget {
                   PieChartSectionData(
                     value: buckets[i].paise.toDouble(),
                     color: _pieColors[i % _pieColors.length],
-                    title: total == 0
-                        ? ''
-                        : '${(buckets[i].paise / total * 100).round()}%',
+                    title: total == 0 ? '' : '${pct[i]}%',
                     radius: 60,
                     titleStyle: const TextStyle(
                         color: Colors.white,
@@ -476,7 +481,7 @@ class _Pie extends StatelessWidget {
                       color: _pieColors[i % _pieColors.length]),
                   const SizedBox(width: 4),
                   Text(
-                      '${buckets[i].label}  ${Money.format(buckets[i].paise, decimals: false)}',
+                      '${buckets[i].label}  ${Money.format(buckets[i].paise, decimals: false)}  (${pct[i]}%)',
                       style: Theme.of(context).textTheme.bodySmall),
                 ],
               ),

@@ -13,6 +13,11 @@ class Txn {
   final String? eventId;
   final String? attachmentPath;
 
+  /// When [paymentMode] == 'Cash+UPI', these hold the split.
+  /// Invariant: cashPaise + upiPaise == amountPaise. Null on non-split rows.
+  final int? cashPaise;
+  final int? upiPaise;
+
   const Txn({
     required this.id,
     required this.type,
@@ -26,9 +31,23 @@ class Txn {
     this.source = 'manual',
     this.eventId,
     this.attachmentPath,
+    this.cashPaise,
+    this.upiPaise,
   });
 
+  bool get isSplit => paymentMode == 'Cash+UPI';
+
   bool get isIncome => type == 'income';
+
+  /// How much of this transaction was paid in cash — 0 for pure-UPI/Bank/etc,
+  /// full amount for cash, the cash slice for a split. Used by report buckets.
+  int get cashPortionPaise {
+    if (isSplit) return cashPaise ?? 0;
+    return paymentMode == 'Cash' ? amountPaise : 0;
+  }
+
+  /// Complement of [cashPortionPaise] — everything non-cash counts as digital.
+  int get digitalPortionPaise => amountPaise - cashPortionPaise;
 
   factory Txn.fromJson(Map<String, dynamic> j) => Txn(
         id: j['id'] as String,
@@ -43,6 +62,8 @@ class Txn {
         source: (j['source'] as String?) ?? 'manual',
         eventId: j['event_id'] as String?,
         attachmentPath: j['attachment_path'] as String?,
+        cashPaise: (j['cash_paise'] as num?)?.toInt(),
+        upiPaise: (j['upi_paise'] as num?)?.toInt(),
       );
 }
 

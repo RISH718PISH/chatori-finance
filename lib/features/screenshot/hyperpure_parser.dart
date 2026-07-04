@@ -280,16 +280,19 @@ class HyperpureParser {
   // ── Line-item extraction ───────────────────────────────────────────
   /// Extracts item rows from the invoice body. Only accepts rows that end in
   /// a strict currency-formatted amount AND look like part of the items table
-  /// (not header/address/totals metadata). Returns [] if the table can't be
-  /// cleanly recognised — the parser then still gives you invoice-level
-  /// totals from the labelled-amount helpers.
+  /// (not header/address/totals metadata).
+  ///
+  /// If a clean "Description ... Amount" header row is found in the OCR, we
+  /// anchor the item section right after it (this rejects the invoice's own
+  /// header block). If no such header row is found (photo OCR often skips it
+  /// or breaks it up), we fall through and walk the WHOLE document — the
+  /// per-line metadata blacklist plus the strict amount rule are enough to
+  /// reject bill-from / bill-to / address / GSTIN blocks.
   static List<HyperpureLineItem> _lineItems(String text) {
     final lines = text.split(RegExp(r'[\r\n]+'));
 
-    // Find the item section's start: the line right after the column header
-    // (which mentions Description AND another column keyword). We do NOT
-    // assume S.No column is on its own line since OCR often merges rows.
-    var startIdx = -1;
+    // Find the item section's start via the column header if present.
+    var startIdx = 0;
     for (var i = 0; i < lines.length; i++) {
       final l = lines[i].toLowerCase();
       final hasDesc = l.contains('description');
@@ -302,10 +305,11 @@ class HyperpureParser {
         break;
       }
     }
-    if (startIdx < 0) return const [];
 
     // End: at the first line that looks like the totals summary row (3
-    // decimal amounts + "total") or the "Other Charges" section header.
+    // decimal amounts + "total") or a totals-block phrase anywhere on the
+    // line. We match by `contains` (not `startsWith`) because photo OCR
+    // sometimes prefixes/suffixes stray characters onto totals lines.
     var endIdx = lines.length;
     for (var i = startIdx; i < lines.length; i++) {
       final l = lines[i].toLowerCase().trim();
@@ -313,7 +317,11 @@ class HyperpureParser {
         endIdx = i;
         break;
       }
-      if (l.startsWith('grand total') || l.contains('total payable')) {
+      if (l.contains('grand total') ||
+          l.contains('total payable') ||
+          l.contains('amount payable') ||
+          l.contains('net payable') ||
+          l.contains('total amount')) {
         endIdx = i;
         break;
       }
@@ -482,6 +490,16 @@ class HyperpureParser {
       'convenience_fee', 'convenience fee',
     ];
     if (noise.contains(l)) return true;
+    // Descriptions containing any obvious totals phrase — filters lines like
+    // "Hyperpure garbled scan xx xx xx Grand Total" if the totals-anchor at
+    // endIdx didn't catch them for any reason.
+    if (l.contains('grand total') ||
+        l.contains('sub total') ||
+        l.contains('subtotal') ||
+        l.contains('total payable') ||
+        l.contains('amount payable')) {
+      return true;
+    }
     return false;
   }
 

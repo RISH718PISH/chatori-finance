@@ -244,34 +244,31 @@ class _ScreenshotImportScreenState extends State<ScreenshotImportScreen> {
         const SizedBox(height: 8),
         _rawText(context, h.rawText),
         const SizedBox(height: 12),
-        // Auto-split is offered whenever items land in 2+ categories — a
-        // catering kitchen almost never buys just one category, so this is
-        // the main flow for real Hyperpure bills.
-        if (_uniqueCategoryCount(h) >= 2) ...[
-          FilledButton.icon(
-            onPressed: _splitHyperpure,
-            icon: const Icon(Icons.call_split),
-            label: Text(
-                'Split into ${_uniqueCategoryCount(h)} categories & save'),
-          ),
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: _reviewHyperpure,
-            icon: const Icon(Icons.merge_type),
-            label: const Text('Save as one entry instead'),
-          ),
-        ] else
-          FilledButton.icon(
-            onPressed: _reviewHyperpure,
-            icon: const Icon(Icons.check),
-            label: const Text('Review & save'),
-          ),
+        // Split-by-category is the primary flow for any Hyperpure bill: real
+        // catering bills almost always span multiple buckets, and even if the
+        // parser only found 0–1 categories the split screen lets you add
+        // more and edit amounts by hand. "Save as one" stays as a fallback.
+        FilledButton.icon(
+          onPressed: _splitHyperpure,
+          icon: const Icon(Icons.call_split),
+          label: Text(_splitButtonLabel(h)),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: _reviewHyperpure,
+          icon: const Icon(Icons.merge_type),
+          label: const Text('Save as one entry instead'),
+        ),
       ],
     );
   }
 
-  int _uniqueCategoryCount(ParsedHyperpure h) =>
-      groupHyperpureItemsByCategory(h.items).length;
+  String _splitButtonLabel(ParsedHyperpure h) {
+    final n = groupHyperpureItemsByCategory(h.items).length;
+    if (n >= 2) return 'Split into $n categories & save';
+    if (n == 1) return 'Review split & save';
+    return 'Split by category & save';
+  }
 
   Widget _itemRow(BuildContext context, HyperpureLineItem it) {
     final qtyUnit = [

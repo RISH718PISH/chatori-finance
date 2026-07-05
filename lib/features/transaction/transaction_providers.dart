@@ -98,6 +98,26 @@ final weekTotalsProvider = Provider<WeeklyTotals>((ref) {
   return WeeklyTotals(current, previous);
 });
 
+/// Map of user_id → display_name for the current business. Powers the
+/// "added by X" attribution shown on transaction tiles. Only refetched when
+/// the business changes or the user updates their display name in Settings.
+final businessMembersProvider =
+    FutureProvider<Map<String, String>>((ref) async {
+  final biz = await ref.watch(businessIdProvider.future);
+  if (biz == null) return const {};
+  return ref.watch(authRepoProvider).fetchMembersMap(biz);
+});
+
+/// Renders the "by X" suffix for a transaction. Returns null when there's no
+/// author, only one member in the business (single-user, so attribution is
+/// noise), or the map hasn't loaded yet.
+String? attributionFor(Map<String, String>? members, String? userId) {
+  if (members == null || members.length < 2 || userId == null) return null;
+  final name = members[userId];
+  if (name == null || name.isEmpty) return 'by a member';
+  return 'by $name';
+}
+
 /// Call after adding / editing / deleting a transaction.
 void refreshTransactions(WidgetRef ref) {
   ref.invalidate(businessTxnsProvider);

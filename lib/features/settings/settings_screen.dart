@@ -29,6 +29,53 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     });
   }
 
+  Future<void> _editDisplayName() async {
+    // Prefill with whatever the current display name is; falls back to the
+    // email prefix (what handle_new_user seeded).
+    final auth = ref.read(authRepoProvider);
+    final current = await auth.displayName() ?? '';
+    if (!mounted) return;
+    final controller = TextEditingController(text: current);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('My display name'),
+        content: TextField(
+          controller: controller,
+          textCapitalization: TextCapitalization.words,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Your name',
+            hintText: 'e.g. Rishabh',
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              child: const Text('Save')),
+        ],
+      ),
+    );
+    if (newName == null || newName.isEmpty) return;
+    try {
+      await auth.updateMyDisplayName(newName);
+      // Refresh the members map so every "added by …" tile updates in place.
+      ref.invalidate(businessMembersProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Display name set to $newName')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not update: $e')),
+      );
+    }
+  }
+
   Future<void> _invite() async {
     final controller = TextEditingController();
     final email = await showDialog<String>(
@@ -93,6 +140,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   subtitle: Text(email),
                 ),
                 const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.badge_outlined),
+                  title: const Text('My display name'),
+                  subtitle: const Text(
+                      'Shown as "added by …" on every entry you save'),
+                  onTap: _editDisplayName,
+                ),
                 ListTile(
                   leading: const Icon(Icons.person_add_alt),
                   title: const Text('Invite member'),

@@ -18,6 +18,11 @@ class Txn {
   final int? cashPaise;
   final int? upiPaise;
 
+  /// Auth user id of whoever saved this entry — used for the "added by X"
+  /// attribution on transaction tiles. Null on rows created before this was
+  /// tracked.
+  final String? createdBy;
+
   const Txn({
     required this.id,
     required this.type,
@@ -33,6 +38,7 @@ class Txn {
     this.attachmentPath,
     this.cashPaise,
     this.upiPaise,
+    this.createdBy,
   });
 
   bool get isSplit => paymentMode == 'Cash+UPI';
@@ -64,6 +70,7 @@ class Txn {
         attachmentPath: j['attachment_path'] as String?,
         cashPaise: (j['cash_paise'] as num?)?.toInt(),
         upiPaise: (j['upi_paise'] as num?)?.toInt(),
+        createdBy: j['created_by'] as String?,
       );
 }
 

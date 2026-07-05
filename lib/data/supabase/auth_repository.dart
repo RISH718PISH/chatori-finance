@@ -35,6 +35,31 @@ class AuthRepository {
     return rows.first['business_id'] as String;
   }
 
+  /// Map of every member's user_id → display_name for the given business.
+  /// Used to render "added by X" on transaction tiles.
+  Future<Map<String, String>> fetchMembersMap(String businessId) async {
+    final rows = await _client
+        .from('business_members')
+        .select('user_id, display_name')
+        .eq('business_id', businessId);
+    return {
+      for (final r in rows)
+        r['user_id'] as String: ((r['display_name'] as String?) ?? '').trim(),
+    };
+  }
+
+  /// Updates the current user's display name for every business they're a
+  /// member of. Simple case: both owners share one business, so this updates
+  /// exactly one row.
+  Future<void> updateMyDisplayName(String name) async {
+    final uid = currentUser?.id;
+    if (uid == null) return;
+    await _client
+        .from('business_members')
+        .update({'display_name': name.trim()})
+        .eq('user_id', uid);
+  }
+
   /// Display name for the current user's membership.
   Future<String?> displayName() async {
     final uid = currentUser?.id;

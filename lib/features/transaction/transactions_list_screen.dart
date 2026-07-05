@@ -165,6 +165,8 @@ class _TransactionsListScreenState
                 if (list.isEmpty) {
                   return const Center(child: Text('No matching entries.'));
                 }
+                final members =
+                    ref.watch(businessMembersProvider).asData?.value;
                 return RefreshIndicator(
                   onRefresh: () async {
                     ref.invalidate(businessTxnsProvider);
@@ -175,7 +177,8 @@ class _TransactionsListScreenState
                   child: ListView.separated(
                     itemCount: list.length,
                     separatorBuilder: (_, i) => const Divider(height: 1),
-                    itemBuilder: (_, i) => _Tile(txn: list[i]),
+                    itemBuilder: (_, i) =>
+                        _Tile(txn: list[i], members: members),
                   ),
                 );
               },
@@ -201,17 +204,20 @@ class _TransactionsListScreenState
 }
 
 class _Tile extends StatelessWidget {
-  const _Tile({required this.txn});
+  const _Tile({required this.txn, this.members});
   final Txn txn;
+  final Map<String, String>? members;
 
   @override
   Widget build(BuildContext context) {
     final isIncome = txn.isIncome;
     final color = isIncome ? AppSemantics.income : AppSemantics.expense;
+    final byWhom = attributionFor(members, txn.createdBy);
     final subtitle = [
       txn.paymentMode,
       if ((txn.partyName ?? '').isNotEmpty) txn.partyName,
       DateFormat('d MMM, h:mm a').format(txn.occurredAt),
+      ?byWhom,
     ].where((e) => e != null).join(' · ');
     return ListTile(
       onTap: () => context.push('/add', extra: txn),

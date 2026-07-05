@@ -202,8 +202,17 @@ class _EventDetail extends ConsumerWidget {
                         'No entries linked yet.\nUse "Add entry" or pick this event when adding a transaction.',
                         textAlign: TextAlign.center)),
               )
-            else
-              for (final t in txns) _TxnRow(txn: t),
+            else ...[
+              Builder(builder: (context) {
+                final members =
+                    ref.watch(businessMembersProvider).asData?.value;
+                return Column(
+                  children: [
+                    for (final t in txns) _TxnRow(txn: t, members: members),
+                  ],
+                );
+              }),
+            ],
             const SizedBox(height: 72),
           ],
         ),
@@ -270,12 +279,14 @@ class _EventDetail extends ConsumerWidget {
 }
 
 class _TxnRow extends StatelessWidget {
-  const _TxnRow({required this.txn});
+  const _TxnRow({required this.txn, this.members});
   final Txn txn;
+  final Map<String, String>? members;
 
   @override
   Widget build(BuildContext context) {
     final color = txn.isIncome ? AppSemantics.income : AppSemantics.expense;
+    final byWhom = attributionFor(members, txn.createdBy);
     return ListTile(
       contentPadding: EdgeInsets.zero,
       onTap: () => context.push('/add', extra: txn),
@@ -290,6 +301,7 @@ class _TxnRow extends StatelessWidget {
           txn.paymentMode,
           if ((txn.partyName ?? '').isNotEmpty) txn.partyName,
           DateFormat('d MMM').format(txn.occurredAt),
+          ?byWhom,
         ].join(' · '),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,

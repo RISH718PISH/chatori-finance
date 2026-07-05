@@ -16,6 +16,7 @@ class HomeScreen extends ConsumerWidget {
     final totals = ref.watch(todayTotalsProvider);
     final weekly = ref.watch(weekTotalsProvider);
     final recent = ref.watch(recentTransactionsProvider);
+    final members = ref.watch(businessMembersProvider).asData?.value;
 
     return Scaffold(
       appBar: AppBar(
@@ -176,7 +177,9 @@ class HomeScreen extends ConsumerWidget {
             data: (txns) => txns.isEmpty
                 ? const _EmptyRecent()
                 : Column(
-                    children: [for (final t in txns) _TxnTile(t)],
+                    children: [
+                      for (final t in txns) _TxnTile(t, members: members),
+                    ],
                   ),
           ),
         ],
@@ -288,17 +291,20 @@ class _NavTile extends StatelessWidget {
 }
 
 class _TxnTile extends StatelessWidget {
-  const _TxnTile(this.txn);
+  const _TxnTile(this.txn, {this.members});
   final Txn txn;
+  final Map<String, String>? members;
 
   @override
   Widget build(BuildContext context) {
     final isIncome = txn.type == 'income';
     final color = isIncome ? AppSemantics.income : AppSemantics.expense;
+    final byWhom = attributionFor(members, txn.createdBy);
     final subtitle = [
       txn.paymentMode,
       if (txn.partyName != null && txn.partyName!.isNotEmpty) txn.partyName,
       DateFormat('d MMM, h:mm a').format(txn.occurredAt),
+      ?byWhom,
     ].join(' · ');
 
     return ListTile(

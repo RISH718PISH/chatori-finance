@@ -120,7 +120,6 @@ const List<String> kPaymentModes = [
   'Cash',
   'UPI',
   kPaymentModeSplit,
-  'Paytm',
   'Bank',
   'Other',
 ];

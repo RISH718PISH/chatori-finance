@@ -1,30 +1,36 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/design.dart';
 import '../../core/money.dart';
 import '../transaction/add_transaction_screen.dart';
+import 'hyperpure_actions.dart';
 import 'hyperpure_parser.dart';
 import 'hyperpure_split_screen.dart';
 import 'paytm_parser.dart';
 
-class ScreenshotImportScreen extends StatefulWidget {
+class ScreenshotImportScreen extends ConsumerStatefulWidget {
   const ScreenshotImportScreen({super.key});
 
   @override
-  State<ScreenshotImportScreen> createState() => _ScreenshotImportScreenState();
+  ConsumerState<ScreenshotImportScreen> createState() =>
+      _ScreenshotImportScreenState();
 }
 
-class _ScreenshotImportScreenState extends State<ScreenshotImportScreen> {
+class _ScreenshotImportScreenState
+    extends ConsumerState<ScreenshotImportScreen> {
   bool _busy = false;
   String? _imagePath;
   ParsedPayment? _paytm;
   ParsedHyperpure? _hyperpure;
   String? _error;
+  bool _saving = false;
 
   Future<void> _pick() async {
     setState(() {
@@ -86,6 +92,41 @@ class _ScreenshotImportScreenState extends State<ScreenshotImportScreen> {
         attachmentLocalPath: _imagePath,
       ),
     ));
+  }
+
+  Future<void> _autoSaveHyperpure() async {
+    final h = _hyperpure;
+    if (h == null || _saving) return;
+    setState(() => _saving = true);
+    try {
+      final result = await saveHyperpureBillAsBatch(
+        ref: ref,
+        parsed: h,
+        attachmentLocalPath: _imagePath,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppSemantics.income,
+          duration: const Duration(seconds: 5),
+          content: Text(
+            'Saved ${result.savedCount} '
+            '${result.savedCount == 1 ? 'entry' : 'entries'} · '
+            '${result.categories.join(' · ')}',
+            style: const TextStyle(color: Colors.white),
+          ),
+        ));
+      context.go('/');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not save: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   void _reviewHyperpure() {
@@ -244,18 +285,29 @@ class _ScreenshotImportScreenState extends State<ScreenshotImportScreen> {
         const SizedBox(height: 8),
         _rawText(context, h.rawText),
         const SizedBox(height: 12),
-        // Split-by-category is the primary flow for any Hyperpure bill: real
-        // catering bills almost always span multiple buckets, and even if the
-        // parser only found 0–1 categories the split screen lets you add
-        // more and edit amounts by hand. "Save as one" stays as a fallback.
+        // Auto-save is the primary flow: parse → group by category → batch
+        // insert without asking the user to review each row. Review and
+        // Save-as-one stay as fallbacks.
         FilledButton.icon(
-          onPressed: _splitHyperpure,
-          icon: const Icon(Icons.call_split),
-          label: Text(_splitButtonLabel(h)),
+          onPressed: _saving ? null : _autoSaveHyperpure,
+          icon: _saving
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white))
+              : const Icon(Icons.bolt),
+          label: Text(_saving ? 'Saving…' : _autoSaveButtonLabel(h)),
         ),
         const SizedBox(height: 8),
         OutlinedButton.icon(
-          onPressed: _reviewHyperpure,
+          onPressed: _saving ? null : _splitHyperpure,
+          icon: const Icon(Icons.tune),
+          label: const Text('Review split before saving'),
+        ),
+        const SizedBox(height: 8),
+        TextButton.icon(
+          onPressed: _saving ? null : _reviewHyperpure,
           icon: const Icon(Icons.merge_type),
           label: const Text('Save as one entry instead'),
         ),
@@ -263,11 +315,11 @@ class _ScreenshotImportScreenState extends State<ScreenshotImportScreen> {
     );
   }
 
-  String _splitButtonLabel(ParsedHyperpure h) {
+  String _autoSaveButtonLabel(ParsedHyperpure h) {
     final n = groupHyperpureItemsByCategory(h.items).length;
-    if (n >= 2) return 'Split into $n categories & save';
-    if (n == 1) return 'Review split & save';
-    return 'Split by category & save';
+    if (n >= 2) return 'Auto-split & save $n entries';
+    if (n == 1) return 'Save 1 entry';
+    return 'Save entry';
   }
 
   Widget _itemRow(BuildContext context, HyperpureLineItem it) {

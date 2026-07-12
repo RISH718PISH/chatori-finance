@@ -23,7 +23,7 @@ class _TransactionsListScreenState
     extends ConsumerState<TransactionsListScreen> {
   final _search = TextEditingController();
   String _typeFilter = 'all'; // all | income | expense
-  String? _modeFilter; // Cash | UPI | Paytm | Bank | Other | null
+  String? _modeFilter; // Cash | UPI | Bank | Other | null
   DateTimeRange? _dateRange;
 
   @override
@@ -149,7 +149,7 @@ class _TransactionsListScreenState
                     _dateRange != null,
                     _pickRange),
                 const SizedBox(width: 8),
-                for (final m in ['Cash', 'UPI', 'Paytm', 'Bank', 'Other'])
+                for (final m in ['Cash', 'UPI', 'Bank', 'Other'])
                   _chip(m, _modeFilter == m,
                       () => setState(() => _modeFilter = _modeFilter == m ? null : m)),
               ],

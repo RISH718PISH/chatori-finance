@@ -1,6 +1,7 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -10,6 +11,7 @@ import '../../data/export/report_exporter.dart';
 import '../../data/models/books.dart';
 import '../../data/models/txn.dart';
 import '../books/books_providers.dart';
+import '../transaction/transaction_providers.dart';
 import 'reports_providers.dart';
 
 const _pieColors = [
@@ -306,7 +308,7 @@ class _MonthSelector extends StatelessWidget {
   }
 }
 
-class _Report extends StatelessWidget {
+class _Report extends ConsumerWidget {
   const _Report({
     required this.txns,
     required this.salaryPaid,
@@ -318,7 +320,7 @@ class _Report extends StatelessWidget {
   final int advanceOutstanding;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final income =
         txns.where((t) => t.isIncome).fold<int>(0, (s, t) => s + t.amountPaise);
     final expense =
@@ -374,7 +376,12 @@ class _Report extends StatelessWidget {
         const SizedBox(height: 24),
         if (expenseByCat.isNotEmpty) ...[
           _heading(context, 'Expenses by category'),
-          _Pie(buckets: expenseByCat, total: expense),
+          _Pie(
+            buckets: expenseByCat,
+            total: expense,
+            onSliceTap: (category) => _showCategoryDrillDown(
+                context, ref, category, txns),
+          ),
           const SizedBox(height: 24),
         ],
         if (incomeByCat.isNotEmpty) ...[
@@ -384,7 +391,7 @@ class _Report extends StatelessWidget {
         ],
         _heading(context, 'Cash vs Digital (expenses)'),
         _BarList(
-          buckets: [Bucket('Cash', cash), Bucket('UPI / Bank / Paytm', digital)],
+          buckets: [Bucket('Cash', cash), Bucket('UPI / Bank', digital)],
           total: expense,
           color: Colors.teal,
         ),
@@ -434,9 +441,13 @@ class _Report extends StatelessWidget {
 }
 
 class _Pie extends StatelessWidget {
-  const _Pie({required this.buckets, required this.total});
+  const _Pie({required this.buckets, required this.total, this.onSliceTap});
   final List<Bucket> buckets;
   final int total;
+
+  /// If provided, tapping a slice or a legend row invokes this with the
+  /// bucket label (typically a category name). Null → chart is display-only.
+  final ValueChanged<String>? onSliceTap;
 
   @override
   Widget build(BuildContext context) {
@@ -450,6 +461,16 @@ class _Pie extends StatelessWidget {
             PieChartData(
               sectionsSpace: 2,
               centerSpaceRadius: 40,
+              pieTouchData: PieTouchData(
+                enabled: onSliceTap != null,
+                touchCallback: (event, response) {
+                  if (onSliceTap == null) return;
+                  if (event is! FlTapUpEvent) return;
+                  final idx = response?.touchedSection?.touchedSectionIndex;
+                  if (idx == null || idx < 0 || idx >= buckets.length) return;
+                  onSliceTap!(buckets[idx].label);
+                },
+              ),
               sections: [
                 for (var i = 0; i < buckets.length; i++)
                   PieChartSectionData(
@@ -472,22 +493,145 @@ class _Pie extends StatelessWidget {
           runSpacing: 6,
           children: [
             for (var i = 0; i < buckets.length; i++)
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                      width: 12,
-                      height: 12,
-                      color: _pieColors[i % _pieColors.length]),
-                  const SizedBox(width: 4),
-                  Text(
-                      '${buckets[i].label}  ${Money.format(buckets[i].paise, decimals: false)}  (${pct[i]}%)',
-                      style: Theme.of(context).textTheme.bodySmall),
-                ],
+              InkWell(
+                onTap: onSliceTap == null
+                    ? null
+                    : () => onSliceTap!(buckets[i].label),
+                borderRadius: BorderRadius.circular(4),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 2, vertical: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                          width: 12,
+                          height: 12,
+                          color: _pieColors[i % _pieColors.length]),
+                      const SizedBox(width: 4),
+                      Text(
+                          '${buckets[i].label}  ${Money.format(buckets[i].paise, decimals: false)}  (${pct[i]}%)',
+                          style: Theme.of(context).textTheme.bodySmall),
+                    ],
+                  ),
+                ),
               ),
           ],
         ),
+        if (onSliceTap != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            'Tap a slice or category for details',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontStyle: FontStyle.italic,
+                color: Theme.of(context).hintColor),
+          ),
+        ],
       ],
+    );
+  }
+}
+
+Future<void> _showCategoryDrillDown(
+  BuildContext context,
+  WidgetRef ref,
+  String category,
+  List<Txn> monthTxns,
+) {
+  final rows = monthTxns
+      .where((t) => !t.isIncome && t.category == category)
+      .toList()
+    ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+  final total = rows.fold<int>(0, (s, t) => s + t.amountPaise);
+  final members = ref.read(businessMembersProvider).asData?.value;
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (ctx) => DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.6,
+      minChildSize: 0.35,
+      maxChildSize: 0.92,
+      builder: (ctx, scroll) => Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(category,
+                          style: Theme.of(ctx).textTheme.titleLarge),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${rows.length} '
+                        '${rows.length == 1 ? 'entry' : 'entries'}',
+                        style: Theme.of(ctx).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                Text(
+                  Money.format(total, decimals: false),
+                  style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                      color: AppSemantics.expense,
+                      fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: rows.isEmpty
+                ? const Center(child: Text('No entries in this category.'))
+                : ListView.separated(
+                    controller: scroll,
+                    itemCount: rows.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (_, i) =>
+                        _DrillTile(txn: rows[i], members: members),
+                  ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _DrillTile extends StatelessWidget {
+  const _DrillTile({required this.txn, this.members});
+  final Txn txn;
+  final Map<String, String>? members;
+
+  @override
+  Widget build(BuildContext context) {
+    final byWhom = attributionFor(members, txn.createdBy);
+    final subtitle = [
+      txn.paymentMode,
+      if ((txn.partyName ?? '').isNotEmpty) txn.partyName,
+      DateFormat('d MMM, h:mm a').format(txn.occurredAt),
+      ?byWhom,
+    ].join(' · ');
+    return ListTile(
+      onTap: () {
+        Navigator.of(context).pop();
+        context.push('/add', extra: txn);
+      },
+      leading: const CircleAvatar(
+        backgroundColor: Color(0x22B71C1C),
+        child: Icon(Icons.north_east, color: AppSemantics.expense),
+      ),
+      title: Text(txn.category),
+      subtitle: Text(subtitle,
+          maxLines: 1, overflow: TextOverflow.ellipsis),
+      trailing: Text(
+        '−${Money.format(txn.amountPaise)}',
+        style: const TextStyle(
+            color: AppSemantics.expense, fontWeight: FontWeight.bold),
+      ),
     );
   }
 }

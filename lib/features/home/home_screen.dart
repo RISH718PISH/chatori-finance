@@ -130,6 +130,12 @@ class HomeScreen extends ConsumerWidget {
               ),
             ],
           ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => context.push('/add-bulk?type=expense'),
+            icon: const Icon(Icons.playlist_add, size: 18),
+            label: const Text('Add multiple expenses at once'),
+          ),
           const SizedBox(height: 20),
 
           // --- Sections ---

@@ -11,6 +11,7 @@ import '../features/salary/salary_screen.dart';
 import '../features/screenshot/screenshot_import_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/transaction/add_transaction_screen.dart';
+import '../features/transaction/bulk_add_screen.dart';
 import '../features/transaction/transactions_list_screen.dart';
 import '../features/vendors/vendors_screen.dart';
 
@@ -34,6 +35,19 @@ final appRouter = GoRouter(
           initialType: type,
           prefill: prefill,
           initialEventId: state.uri.queryParameters['event'],
+        );
+      },
+    ),
+    GoRoute(
+      path: '/add-bulk',
+      builder: (_, state) {
+        final extra = state.extra;
+        final type = state.uri.queryParameters['type'] == 'income'
+            ? 'income'
+            : 'expense';
+        return BulkAddScreen(
+          type: type,
+          seed: extra is BulkSeedRow ? extra : null,
         );
       },
     ),

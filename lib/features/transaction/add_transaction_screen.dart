@@ -12,6 +12,7 @@ import '../../core/money.dart';
 import '../../data/models/event.dart';
 import '../../data/models/txn.dart';
 import '../events/events_providers.dart';
+import 'bulk_add_screen.dart';
 import 'transaction_providers.dart';
 
 /// Optional values to pre-fill the form (e.g. from a Paytm/Hyperpure scan).
@@ -461,21 +462,47 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
             top: false,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-              child: FilledButton.icon(
-                style: FilledButton.styleFrom(backgroundColor: accent),
-                onPressed: _canSave && !_saving ? _save : null,
-                icon: _saving
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.check),
-                label: Text(_saving ? 'Saving…' : 'Save'),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(backgroundColor: accent),
+                    onPressed: _canSave && !_saving ? _save : null,
+                    icon: _saving
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.check),
+                    label: Text(_saving ? 'Saving…' : 'Save'),
+                  ),
+                  if (!_isEdit) ...[
+                    const SizedBox(height: 4),
+                    TextButton.icon(
+                      onPressed: _saving ? null : _openBulk,
+                      icon: const Icon(Icons.playlist_add, size: 18),
+                      label: const Text('Add another entry'),
+                    ),
+                  ],
+                ],
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _openBulk() {
+    context.push(
+      '/add-bulk?type=$_type',
+      extra: BulkSeedRow(
+        category: _category?.name,
+        amountPaise: _amountPaise,
+        notes: _noteController.text.trim().isEmpty
+            ? null
+            : _noteController.text.trim(),
       ),
     );
   }

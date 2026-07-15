@@ -78,7 +78,14 @@ class MonthlyPl {
   double get foodCostPct =>
       totalRevenue == 0 ? 0 : totalCogs / totalRevenue * 100;
 
-  factory MonthlyPl.fromTxns(Iterable<Txn> txns) {
+  /// [salaryForMonthPaise] is the full salary expense for the month (cash
+  /// paid + advance adjusted), sourced from the separate `salary_records`
+  /// ledger — salaries are NOT stored as transactions, so they must be
+  /// injected here or they never reach Operating / Net. Merged into the
+  /// "Salaries" operating line so it counts once even if a manual "Salaries"
+  /// transaction also exists.
+  factory MonthlyPl.fromTxns(Iterable<Txn> txns,
+      {int salaryForMonthPaise = 0}) {
     final rev = <String, int>{};
     final cog = <String, int>{};
     final op = <String, int>{};
@@ -91,6 +98,10 @@ class MonthlyPl {
       };
       map.update(t.category, (v) => v + t.amountPaise,
           ifAbsent: () => t.amountPaise);
+    }
+    if (salaryForMonthPaise > 0) {
+      op.update('Salaries', (v) => v + salaryForMonthPaise,
+          ifAbsent: () => salaryForMonthPaise);
     }
     List<Bucket> sorted(Map<String, int> m) {
       final list = m.entries.map((e) => Bucket(e.key, e.value)).toList();

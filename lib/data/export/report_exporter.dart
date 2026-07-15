@@ -54,7 +54,10 @@ class ReportExporter {
   }) {
     final title = DateFormat('MMMM yyyy').format(month);
     final income = txns.where((t) => t.isIncome).fold<int>(0, (s, t) => s + t.amountPaise);
-    final expense = txns.where((t) => !t.isIncome).fold<int>(0, (s, t) => s + t.amountPaise);
+    // Salaries are held in a separate ledger (not transactions); include them
+    // in total expenses and net so the summary matches the in-app Reports.
+    final txnExpense = txns.where((t) => !t.isIncome).fold<int>(0, (s, t) => s + t.amountPaise);
+    final expense = txnExpense + salaryPaidPaise;
     final net = income - expense;
 
     // Category breakdowns

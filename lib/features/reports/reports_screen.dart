@@ -37,11 +37,17 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final salary = ref.watch(salaryProvider).asData?.value ?? const <SalaryRecord>[];
     final advances = ref.watch(advancesProvider).asData?.value ?? const <Advance>[];
 
-    final monthKey =
-        '${month.year.toString().padLeft(4, '0')}-${month.month.toString().padLeft(2, '0')}';
-    final salaryPaid = salary
-        .where((r) => r.month == monthKey)
-        .fold<int>(0, (s, r) => s + r.amountPaidPaise);
+    String keyOf(DateTime m) =>
+        '${m.year.toString().padLeft(4, '0')}-${m.month.toString().padLeft(2, '0')}';
+    final monthKey = keyOf(month);
+    final prevMonthKey = keyOf(DateTime(month.year, month.month - 1));
+    // Full salary expense for the month = cash paid + advance adjusted.
+    // (Deducting an advance still means the full salary was earned/expensed.)
+    int salaryFor(String key) => salary
+        .where((r) => r.month == key)
+        .fold<int>(0, (s, r) => s + r.amountPaidPaise + r.advanceAdjustedPaise);
+    final salaryPaid = salaryFor(monthKey);
+    final prevSalaryPaid = salaryFor(prevMonthKey);
     final advanceOutstanding = advances
         .where((a) => a.status != 'closed')
         .fold<int>(0, (s, a) => s + a.outstandingPaise);
@@ -86,7 +92,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('Error: $e')),
               data: (txns) => _view == 'pl'
-                  ? _PlView(txns: txns)
+                  ? _PlView(
+                      txns: txns,
+                      salaryForMonthPaise: salaryPaid,
+                      prevSalaryPaise: prevSalaryPaid,
+                    )
                   : _Report(
                       txns: txns,
                       salaryPaid: salaryPaid,
@@ -102,18 +112,26 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
 /// Structured monthly P&L: Revenue → COGS → Gross profit → Operating → Net.
 class _PlView extends ConsumerWidget {
-  const _PlView({required this.txns});
+  const _PlView({
+    required this.txns,
+    this.salaryForMonthPaise = 0,
+    this.prevSalaryPaise = 0,
+  });
   final List<Txn> txns;
+  final int salaryForMonthPaise;
+  final int prevSalaryPaise;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final pl = MonthlyPl.fromTxns(txns);
+    final pl = MonthlyPl.fromTxns(txns,
+        salaryForMonthPaise: salaryForMonthPaise);
     final prevAsync = ref.watch(prevMonthTxnsProvider);
     final prev = prevAsync.asData?.value == null
         ? null
-        : MonthlyPl.fromTxns(prevAsync.asData!.value);
+        : MonthlyPl.fromTxns(prevAsync.asData!.value,
+            salaryForMonthPaise: prevSalaryPaise);
 
-    if (txns.isEmpty) {
+    if (txns.isEmpty && salaryForMonthPaise == 0) {
       return const Center(child: Text('No entries for this month.'));
     }
 
@@ -323,9 +341,15 @@ class _Report extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final income =
         txns.where((t) => t.isIncome).fold<int>(0, (s, t) => s + t.amountPaise);
+    // Transaction-only expenses — drives the pie & cash/digital split, which
+    // are built from the transactions list.
     final expense =
         txns.where((t) => !t.isIncome).fold<int>(0, (s, t) => s + t.amountPaise);
-    final net = income - expense;
+    // Salaries live in a separate ledger; fold them in so total expenses and
+    // net profit are honest. The pie below stays transaction-only and the
+    // "Salary paid" card shows the salary portion separately.
+    final totalExpense = expense + salaryPaid;
+    final net = income - totalExpense;
 
     final expenseByCat =
         bucketize(txns, (t) => t.category, where: (t) => !t.isIncome);
@@ -346,7 +370,7 @@ class _Report extends ConsumerWidget {
         .where((t) => !t.isIncome)
         .fold<int>(0, (s, t) => s + t.digitalPortionPaise);
 
-    if (txns.isEmpty) {
+    if (txns.isEmpty && salaryPaid == 0) {
       return const Center(child: Text('No entries for this month.'));
     }
 
@@ -357,7 +381,7 @@ class _Report extends ConsumerWidget {
           children: [
             _card(context, 'Income', income, AppSemantics.income),
             const SizedBox(width: 12),
-            _card(context, 'Expenses', expense, AppSemantics.expense),
+            _card(context, 'Expenses', totalExpense, AppSemantics.expense),
           ],
         ),
         const SizedBox(height: 12),
@@ -367,12 +391,22 @@ class _Report extends ConsumerWidget {
         const SizedBox(height: 12),
         Row(
           children: [
-            _card(context, 'Salary paid', salaryPaid, Colors.blue),
+            _card(context, 'of which Salary', salaryPaid, Colors.blue),
             const SizedBox(width: 12),
             _card(context, 'Advance outstanding', advanceOutstanding,
                 AppSemantics.warning),
           ],
         ),
+        if (salaryPaid > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              'Salary is included in Expenses & Net above (from the Salary '
+              'screen, counted in the month it is for). The category pie below '
+              'shows typed expenses only.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
         const SizedBox(height: 24),
         if (expenseByCat.isNotEmpty) ...[
           _heading(context, 'Expenses by category'),
@@ -718,7 +752,8 @@ void _showShareSheet({
             enabled: txns.isNotEmpty,
             onTap: () async {
               Navigator.pop(ctx);
-              final pl = MonthlyPl.fromTxns(txns);
+              final pl = MonthlyPl.fromTxns(txns,
+                  salaryForMonthPaise: salaryPaid);
               final text = ReportExporter.buildPlText(
                 month: month,
                 revenue: pl.revenue,

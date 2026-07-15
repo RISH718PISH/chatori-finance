@@ -49,4 +49,40 @@ void main() {
     expect(pl.grossMarginPct, 0);
     expect(pl.foodCostPct, 0);
   });
+
+  test('salary from the separate ledger folds into operating and net', () {
+    // Salaries are NOT transactions; they arrive via salaryForMonthPaise.
+    final pl = MonthlyPl.fromTxns(
+      [
+        _txn('income', 'Catering', 100000 * 100),
+        _txn('expense', 'Groceries', 30000 * 100), // COGS
+        _txn('expense', 'Rent', 15000 * 100), // operating
+      ],
+      salaryForMonthPaise: 25000 * 100, // full salary (cash + advance adj.)
+    );
+
+    expect(pl.totalRevenue, 100000 * 100);
+    expect(pl.totalCogs, 30000 * 100);
+    // Rent ₹15,000 + injected Salaries ₹25,000 = ₹40,000 operating.
+    expect(pl.totalOperating, 40000 * 100);
+    // Net = 100000 - 30000 - 40000 = ₹30,000. Without the salary fold-in
+    // this used to read ₹55,000 — the bug the owner spotted.
+    expect(pl.netProfit, 30000 * 100);
+    final salaries =
+        pl.operating.firstWhere((b) => b.label == 'Salaries');
+    expect(salaries.paise, 25000 * 100);
+  });
+
+  test('injected salary merges with a manual Salaries transaction (no dup)',
+      () {
+    final pl = MonthlyPl.fromTxns(
+      [_txn('expense', 'Salaries', 10000 * 100)],
+      salaryForMonthPaise: 25000 * 100,
+    );
+    // One combined Salaries line, summed — not two separate lines.
+    final salaryLines =
+        pl.operating.where((b) => b.label == 'Salaries').toList();
+    expect(salaryLines.length, 1);
+    expect(salaryLines.single.paise, 35000 * 100);
+  });
 }

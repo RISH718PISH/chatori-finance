@@ -41,6 +41,11 @@ $$;
 -- ── 2. Enable RLS and add owner-only policies ─────────────────
 alter table public.business_invites enable row level security;
 
+-- Remove the earlier member-level policy. Permissive policies combine with
+-- OR, so leaving a `for all` membership policy in place would nullify the
+-- owner-only policies below.
+drop policy if exists invites_member_rw on public.business_invites;
+
 drop policy if exists inv_owner_read on public.business_invites;
 create policy inv_owner_read on public.business_invites
   for select using (business_id in (select public.my_owner_business_ids()));

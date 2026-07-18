@@ -4,7 +4,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../data/models/txn.dart';
 import '../../data/supabase/attachment_repository.dart';
 import '../../data/supabase/auth_repository.dart';
+import '../../data/supabase/purchase_invoice_repository.dart';
 import '../../data/supabase/transaction_repository.dart';
+import '../screenshot/invoice_ai_client.dart';
 
 final supabaseClientProvider =
     Provider<SupabaseClient>((ref) => Supabase.instance.client);
@@ -19,6 +21,15 @@ final transactionRepoProvider = Provider<TransactionRepository>(
 
 final attachmentRepoProvider = Provider<AttachmentRepository>(
   (ref) => AttachmentRepository(ref.watch(supabaseClientProvider)),
+);
+
+/// Reads invoice line items via the `parse-invoice` Edge Function.
+final invoiceAiClientProvider = Provider<InvoiceAiClient>(
+  (ref) => InvoiceAiClient(ref.watch(supabaseClientProvider)),
+);
+
+final purchaseInvoiceRepoProvider = Provider<PurchaseInvoiceRepository>(
+  (ref) => PurchaseInvoiceRepository(ref.watch(supabaseClientProvider)),
 );
 
 /// Rebuilds whenever auth state changes (sign in / out).

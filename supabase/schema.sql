@@ -328,3 +328,175 @@ begin
       add constraint business_invites_role_check check (role in ('owner', 'chef'));
   end if;
 end $$;
+
+-- ─────────────────────────────────────────────────────────────
+-- 9. Purchase invoices — item-level capture from the AI OCR path.
+--
+--    The old pipeline threw line items away: addBatch() accepted only
+--    (category, amount_paise, notes), so quantity was parsed and then
+--    discarded, and unit of measure was never extracted at all. These
+--    two tables keep the detail; the per-category `transactions` rows
+--    are still written exactly as before, so the P&L is unchanged.
+--
+--    BOTH tables are OWNER-ONLY. RLS is row-level and column-blind — if
+--    cost sits on a row a chef can read, the chef has the price no
+--    matter what the Dart UI does. Keeping cost here (and off
+--    stock_movements in section 10) is what actually enforces
+--    "chef sees quantities, not rupees".
+-- ─────────────────────────────────────────────────────────────
+create table if not exists public.purchase_invoices (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references public.businesses (id) on delete cascade,
+  vendor_name text,
+  invoice_number text,
+  invoice_date date,
+  subtotal_paise bigint,
+  tax_paise bigint,
+  total_paise bigint,
+  attachment_path text,
+  raw_ocr_json jsonb,
+  parse_source text not null default 'ai',      -- ai | fallback | manual
+  status text not null default 'confirmed',     -- draft | confirmed
+  created_by uuid references auth.users (id) default auth.uid(),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists purchase_invoices_business_date
+  on public.purchase_invoices (business_id, invoice_date desc);
+
+create table if not exists public.purchase_invoice_items (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references public.businesses (id) on delete cascade,
+  invoice_id uuid not null
+    references public.purchase_invoices (id) on delete cascade,
+  description text not null,
+  hsn text,
+  -- Quantity as integer milli-units of the dimension's base unit
+  -- (mass->mg, volume->uL, count->milli-piece). See lib/core/quantity.dart.
+  -- Nullable because a unit is not always readable on the invoice.
+  qty_milli bigint,
+  dimension text,                                -- mass | volume | count
+  display_unit text,                             -- kg | g | l | ml | pcs | dozen
+  unit_price_paise bigint,
+  line_total_paise bigint not null,
+  category text not null,
+  confidence numeric(3, 2),
+  inventory_item_id uuid,                        -- FK added in section 10
+  created_at timestamptz not null default now()
+);
+
+create index if not exists purchase_invoice_items_invoice
+  on public.purchase_invoice_items (invoice_id);
+
+-- Link the money rows back to the invoice they came from.
+alter table public.transactions
+  add column if not exists source_invoice_id uuid
+    references public.purchase_invoices (id) on delete set null;
+
+alter table public.purchase_invoices      enable row level security;
+alter table public.purchase_invoice_items enable row level security;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['purchase_invoices', 'purchase_invoice_items']
+  loop
+    execute format('drop policy if exists %I_owner_rw on public.%I;', t, t);
+    execute format($f$
+      create policy %1$I_owner_rw on public.%1$I
+        for all
+        using (business_id in (select public.my_owner_business_ids()))
+        with check (business_id in (select public.my_owner_business_ids()));
+    $f$, t);
+  end loop;
+end $$;
+
+-- Saves an invoice, its line items, and the per-category expense rows in
+-- ONE transaction. Doing this as three sequential client calls risks a
+-- half-saved invoice, and a retry after a partial failure would duplicate
+-- the money rows. SECURITY INVOKER (the default) so the owner-only RLS
+-- policies above still apply to the caller.
+create or replace function public.save_purchase_invoice(
+  p_business_id   uuid,
+  p_vendor        text,
+  p_invoice_no    text,
+  p_invoice_date  date,
+  p_subtotal      bigint,
+  p_tax           bigint,
+  p_total         bigint,
+  p_attachment    text,
+  p_raw_json      jsonb,
+  p_parse_source  text,
+  p_items         jsonb,
+  p_payment_mode  text,
+  p_party         text,
+  p_event_id      uuid,
+  p_occurred_at   timestamptz
+) returns uuid
+  language plpgsql
+as $$
+declare
+  v_invoice_id uuid;
+begin
+  insert into public.purchase_invoices (
+    business_id, vendor_name, invoice_number, invoice_date,
+    subtotal_paise, tax_paise, total_paise,
+    attachment_path, raw_ocr_json, parse_source
+  ) values (
+    p_business_id, p_vendor, p_invoice_no, p_invoice_date,
+    p_subtotal, p_tax, p_total,
+    p_attachment, p_raw_json, coalesce(p_parse_source, 'ai')
+  )
+  returning id into v_invoice_id;
+
+  insert into public.purchase_invoice_items (
+    business_id, invoice_id, description, hsn, qty_milli, dimension,
+    display_unit, unit_price_paise, line_total_paise, category, confidence
+  )
+  select
+    p_business_id, v_invoice_id,
+    it.description, it.hsn, it.qty_milli, it.dimension,
+    it.display_unit, it.unit_price_paise, it.line_total_paise,
+    it.category, it.confidence
+  from jsonb_to_recordset(p_items) as it(
+    description      text,
+    hsn              text,
+    qty_milli        bigint,
+    dimension        text,
+    display_unit     text,
+    unit_price_paise bigint,
+    line_total_paise bigint,
+    category         text,
+    confidence       numeric
+  );
+
+  -- One expense row per category, exactly as the previous split flow
+  -- produced, so Reports and the P&L behave identically.
+  insert into public.transactions (
+    business_id, type, category, amount_paise, occurred_at, payment_mode,
+    party_name, notes, source, event_id, attachment_path, source_invoice_id
+  )
+  select
+    p_business_id,
+    'expense',
+    it.category,
+    sum(it.line_total_paise),
+    coalesce(p_occurred_at, now()),
+    p_payment_mode,
+    p_party,
+    coalesce(p_invoice_no, 'Invoice') || E'\n' ||
+      string_agg('• ' || it.description, E'\n' order by it.description),
+    'screenshot',
+    p_event_id,
+    p_attachment,
+    v_invoice_id
+  from jsonb_to_recordset(p_items) as it(
+    description      text,
+    line_total_paise bigint,
+    category         text
+  )
+  group by it.category;
+
+  return v_invoice_id;
+end;
+$$;

@@ -1,63 +1,172 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/design.dart';
 import '../../core/money.dart';
 import '../transaction/add_transaction_screen.dart';
-import 'hyperpure_parser.dart';
-import 'hyperpure_split_screen.dart';
+import '../transaction/transaction_providers.dart';
+import 'invoice_ai_client.dart';
+import 'invoice_review_screen.dart';
 import 'paytm_parser.dart';
 
-class ScreenshotImportScreen extends StatefulWidget {
+/// Entry point for both scanning flows.
+///
+/// The two are separated deliberately rather than auto-detected: the
+/// invoice path makes a paid AI call, so routing a payment screenshot into
+/// it by mistake would cost money and return nothing useful.
+class ScreenshotImportScreen extends ConsumerStatefulWidget {
   const ScreenshotImportScreen({super.key});
 
   @override
-  State<ScreenshotImportScreen> createState() => _ScreenshotImportScreenState();
+  ConsumerState<ScreenshotImportScreen> createState() =>
+      _ScreenshotImportScreenState();
 }
 
-class _ScreenshotImportScreenState extends State<ScreenshotImportScreen> {
+class _ScreenshotImportScreenState
+    extends ConsumerState<ScreenshotImportScreen> {
   bool _busy = false;
+  String _busyLabel = '';
   String? _imagePath;
   ParsedPayment? _paytm;
-  ParsedHyperpure? _hyperpure;
   String? _error;
 
-  Future<void> _pick() async {
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
+  /// Downscaled on capture: a 1600px JPEG is ~400 KB against ~3 MB for a
+  /// raw camera frame. That is less storage burned, a faster upload, and a
+  /// cheaper AI call — with no measurable accuracy loss on invoice text.
+  Future<XFile?> _pickImage() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Take a photo'),
+              subtitle: const Text('Lay the bill flat, fill the frame'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from gallery'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return null;
+    return ImagePicker().pickImage(
+      source: source,
+      maxWidth: 1600,
+      imageQuality: 80,
+    );
+  }
+
+  Future<String> _ocrText(String path) async {
+    final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
     try {
-      final file = await ImagePicker().pickImage(source: ImageSource.gallery);
-      if (file == null) {
-        setState(() => _busy = false);
+      final result =
+          await recognizer.processImage(InputImage.fromFilePath(path));
+      return result.text;
+    } finally {
+      await recognizer.close();
+    }
+  }
+
+  // ── Invoice (AI) ───────────────────────────────────────────
+
+  Future<void> _scanInvoice() async {
+    setState(() {
+      _error = null;
+      _paytm = null;
+    });
+    final file = await _pickImage();
+    if (file == null) return;
+
+    setState(() {
+      _imagePath = file.path;
+      _busy = true;
+      _busyLabel = 'Reading the invoice…';
+    });
+
+    try {
+      // On-device OCR still runs: its text is the offline fallback if the
+      // Edge Function cannot be reached.
+      final text = await _ocrText(file.path);
+      final parsed = await ref
+          .read(invoiceAiClientProvider)
+          .parseWithFallback(localPath: file.path, ocrText: text);
+
+      if (!mounted) return;
+      setState(() => _busy = false);
+
+      if (parsed.items.isEmpty) {
+        setState(() => _error =
+            'No line items could be read from that photo. Try again with '
+            'the bill flat, well lit, and filling the frame.');
         return;
       }
-      final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
-      final result =
-          await recognizer.processImage(InputImage.fromFilePath(file.path));
-      await recognizer.close();
+
+      await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => InvoiceReviewScreen(
+          parsed: parsed,
+          attachmentLocalPath: file.path,
+        ),
+      ));
+    } on InvoiceParseException catch (e) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _error = e.message;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _error = 'Could not read the image: $e';
+        });
+      }
+    }
+  }
+
+  // ── Payment screenshot (on-device) ─────────────────────────
+
+  Future<void> _scanPayment() async {
+    setState(() {
+      _error = null;
+      _paytm = null;
+    });
+    final file = await _pickImage();
+    if (file == null) return;
+
+    setState(() {
+      _imagePath = file.path;
+      _busy = true;
+      _busyLabel = 'Reading the screenshot…';
+    });
+    try {
+      final text = await _ocrText(file.path);
+      if (!mounted) return;
       setState(() {
-        _imagePath = file.path;
-        // Hyperpure invoices first; otherwise treat as a payment screenshot.
-        if (HyperpureParser.looksLikeHyperpure(result.text)) {
-          _hyperpure = HyperpureParser.parse(result.text);
-          _paytm = null;
-        } else {
-          _paytm = PaytmParser.parse(result.text);
-          _hyperpure = null;
-        }
+        _paytm = PaytmParser.parse(text);
         _busy = false;
       });
     } catch (e) {
-      setState(() {
-        _error = 'Could not read the image: $e';
-        _busy = false;
-      });
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _error = 'Could not read the image: $e';
+        });
+      }
     }
   }
 
@@ -77,233 +186,86 @@ class _ScreenshotImportScreenState extends State<ScreenshotImportScreen> {
     );
   }
 
-  void _splitHyperpure() {
-    final h = _hyperpure;
-    if (h == null) return;
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => HyperpureSplitScreen(
-        parsed: h,
-        attachmentLocalPath: _imagePath,
-      ),
-    ));
-  }
-
-  void _reviewHyperpure() {
-    final h = _hyperpure;
-    if (h == null) return;
-    // Build a compact note: invoice # + tax breakdown + up to 5 line items.
-    final noteParts = <String>[
-      h.invoiceNumber == null ? 'Hyperpure invoice' : 'Hyperpure invoice ${h.invoiceNumber}',
-      if (h.taxablePaise != null) 'Taxable ${Money.format(h.taxablePaise!)}',
-      if (h.taxPaise != null) 'Tax ${Money.format(h.taxPaise!)}',
-    ];
-    if (h.items.isNotEmpty) {
-      final top = h.items.take(5).map((it) {
-        final qty = it.quantity == null
-            ? ''
-            : ' ${it.quantity! % 1 == 0 ? it.quantity!.toInt() : it.quantity}';
-        return '• ${it.description}$qty — ${Money.format(it.amountPaise)}';
-      }).join('\n');
-      noteParts.add(top);
-      if (h.items.length > 5) noteParts.add('… +${h.items.length - 5} more');
-    }
-    context.push(
-      '/add',
-      extra: AddPrefill(
-        type: 'expense',
-        category: h.suggestedCategory,
-        amountPaise: h.totalPaise,
-        party: 'Hyperpure',
-        paymentMode: 'Bank',
-        occurredAt: h.invoiceDate,
-        notes: noteParts.join('\n'),
-        fromScreenshot: true,
-        attachmentLocalPath: _imagePath,
-      ),
-    );
-  }
+  // ── Build ──────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Scan bill / screenshot')),
+      appBar: AppBar(title: const Text('Scan')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Text(
-            'Pick a Paytm/UPI payment screenshot or a Hyperpure invoice photo. '
-            'The app reads it on your device and pre-fills a new entry for '
-            'you to confirm.',
+            'Scan a supplier bill to capture every line item, or a payment '
+            'screenshot to pre-fill a single entry.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           FilledButton.icon(
-            onPressed: _busy ? null : _pick,
-            icon: const Icon(Icons.document_scanner_outlined),
-            label: Text(_paytm == null && _hyperpure == null
-                ? 'Pick image'
-                : 'Pick another'),
+            onPressed: _busy ? null : _scanInvoice,
+            icon: const Icon(Icons.receipt_long),
+            label: const Text('Scan a bill / invoice'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _busy ? null : _scanPayment,
+            icon: const Icon(Icons.smartphone),
+            label: const Text('Scan a payment screenshot'),
           ),
           if (_busy) ...[
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
             const Center(child: CircularProgressIndicator()),
-            const SizedBox(height: 8),
-            const Center(child: Text('Reading image…')),
+            const SizedBox(height: 10),
+            Center(
+              child: Text(_busyLabel,
+                  style: Theme.of(context).textTheme.bodyMedium),
+            ),
+            const SizedBox(height: 4),
+            Center(
+              child: Text('This can take a few seconds',
+                  style: Theme.of(context).textTheme.bodySmall),
+            ),
           ],
           if (_error != null) ...[
             const SizedBox(height: 16),
-            Text(_error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error)),
-          ],
-          if (_hyperpure != null && !_busy) _hyperpureResult(context, _hyperpure!),
-          if (_paytm != null && !_busy) _paytmResult(context, _paytm!),
-        ],
-      ),
-    );
-  }
-
-  Widget _imagePreview() {
-    if (_imagePath == null) return const SizedBox.shrink();
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: Image.file(File(_imagePath!), height: 180, fit: BoxFit.contain),
-    );
-  }
-
-  Widget _hyperpureResult(BuildContext context, ParsedHyperpure h) {
-    final missingTotal = h.totalPaise == null;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 20),
-        _imagePreview(),
-        const SizedBox(height: 16),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+            Card(
+              color: AppSemantics.expense.withValues(alpha: 0.08),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(
+                    color: AppSemantics.expense.withValues(alpha: 0.4)),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.receipt_long, size: 20),
-                    const SizedBox(width: 8),
-                    Text('Hyperpure invoice detected',
-                        style: Theme.of(context).textTheme.titleMedium),
+                    const Icon(Icons.error_outline,
+                        color: AppSemantics.expense, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(_error!)),
                   ],
                 ),
-                const Divider(),
-                _row('Vendor', h.vendorName),
-                _row('Invoice', h.invoiceNumber ?? '—'),
-                _row(
-                    'Date',
-                    h.invoiceDate != null
-                        ? DateFormat('d MMM yyyy').format(h.invoiceDate!)
-                        : 'today'),
-                _row('Taxable',
-                    h.taxablePaise != null ? Money.format(h.taxablePaise!) : '—'),
-                _row('Tax (GST)',
-                    h.taxPaise != null ? Money.format(h.taxPaise!) : '—'),
-                _row('Total',
-                    h.totalPaise != null ? Money.format(h.totalPaise!) : '—'),
-                _row('Category', h.suggestedCategory),
-                _row('Payment', 'Bank (editable)'),
-                if (missingTotal)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      'Couldn\'t read the total — edit on the next screen.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.error),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-        if (h.items.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                    child: Text('Items (${h.items.length})',
-                        style: Theme.of(context).textTheme.titleSmall),
-                  ),
-                  const Divider(height: 8),
-                  for (final it in h.items) _itemRow(context, it),
-                ],
               ),
             ),
-          ),
-        ],
-        const SizedBox(height: 8),
-        _rawText(context, h.rawText),
-        const SizedBox(height: 12),
-        // Split-by-category is the primary flow for any Hyperpure bill: real
-        // catering bills almost always span multiple buckets, and even if the
-        // parser only found 0–1 categories the split screen lets you add
-        // more and edit amounts by hand. "Save as one" stays as a fallback.
-        FilledButton.icon(
-          onPressed: _splitHyperpure,
-          icon: const Icon(Icons.call_split),
-          label: Text(_splitButtonLabel(h)),
-        ),
-        const SizedBox(height: 8),
-        OutlinedButton.icon(
-          onPressed: _reviewHyperpure,
-          icon: const Icon(Icons.merge_type),
-          label: const Text('Save as one entry instead'),
-        ),
-      ],
-    );
-  }
-
-  String _splitButtonLabel(ParsedHyperpure h) {
-    final n = groupHyperpureItemsByCategory(h.items).length;
-    if (n >= 2) return 'Split into $n categories & save';
-    if (n == 1) return 'Review split & save';
-    return 'Split by category & save';
-  }
-
-  Widget _itemRow(BuildContext context, HyperpureLineItem it) {
-    final qtyUnit = [
-      if (it.quantity != null) it.quantity!.toStringAsFixed(
-          it.quantity! % 1 == 0 ? 0 : 2),
-      if (it.unitPricePaise != null) '× ${Money.format(it.unitPricePaise!)}',
-    ].join(' ');
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(it.description,
-                    maxLines: 2, overflow: TextOverflow.ellipsis),
-                if (qtyUnit.isNotEmpty)
-                  Text(qtyUnit, style: Theme.of(context).textTheme.bodySmall),
-              ],
-            ),
-          ),
-          Text(Money.format(it.amountPaise),
-              style: const TextStyle(fontWeight: FontWeight.w600)),
+          ],
+          if (_paytm != null && !_busy) _paymentResult(context, _paytm!),
         ],
       ),
     );
   }
 
-  Widget _paytmResult(BuildContext context, ParsedPayment p) {
+  Widget _paymentResult(BuildContext context, ParsedPayment p) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 20),
-        _imagePreview(),
+        if (_imagePath != null)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.file(File(_imagePath!),
+                height: 180, fit: BoxFit.contain),
+          ),
         const SizedBox(height: 16),
         Card(
           child: Padding(
@@ -311,7 +273,8 @@ class _ScreenshotImportScreenState extends State<ScreenshotImportScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Detected', style: Theme.of(context).textTheme.titleMedium),
+                Text('Detected',
+                    style: Theme.of(context).textTheme.titleMedium),
                 const Divider(),
                 _row('Amount',
                     p.amountPaise != null ? Money.format(p.amountPaise!) : '—'),
@@ -326,26 +289,12 @@ class _ScreenshotImportScreenState extends State<ScreenshotImportScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 8),
-        _rawText(context, p.rawText),
         const SizedBox(height: 12),
         FilledButton.icon(
           onPressed: _reviewPaytm,
           icon: const Icon(Icons.check),
           label: const Text('Review & save'),
         ),
-      ],
-    );
-  }
-
-  Widget _rawText(BuildContext context, String raw) {
-    return ExpansionTile(
-      title: const Text('Raw text read'),
-      tilePadding: EdgeInsets.zero,
-      childrenPadding: const EdgeInsets.only(bottom: 12),
-      children: [
-        Text(raw.isEmpty ? '(no text found)' : raw,
-            style: Theme.of(context).textTheme.bodySmall),
       ],
     );
   }

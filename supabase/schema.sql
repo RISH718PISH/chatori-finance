@@ -231,3 +231,95 @@ alter table public.transactions
   add column if not exists cash_paise bigint;
 alter table public.transactions
   add column if not exists upi_paise bigint;
+
+-- ─────────────────────────────────────────────────────────────
+-- 8. SECURITY FIX — lock down business_invites.
+--
+--    business_invites was created in section 1 but never had RLS
+--    enabled and never had any policy. With RLS off, ANY authenticated
+--    user could:
+--      • read every invite row in the database (leaking business ids
+--        and the email of everyone invited), and
+--      • insert {email: <their own>, business_id: <someone else's>,
+--        role: 'owner'} — after which handle_new_user() (SECURITY
+--        DEFINER, section 5) would honour it on signup and hand them
+--        ownership of a business they were never invited to.
+--
+--    Invites are an owner-only concern, so all four verbs are gated on
+--    ownership of the target business.
+-- ─────────────────────────────────────────────────────────────
+
+-- Businesses where the current user is specifically an OWNER (not just a
+-- member). Parameterless + set-returning on purpose: Postgres hoists this
+-- into a once-per-statement InitPlan, exactly like my_business_ids().
+-- A my_role_in(business_id) style helper would be correlated and get
+-- called once PER ROW.
+create or replace function public.my_owner_business_ids()
+  returns setof uuid
+  language sql
+  security definer
+  stable
+  set search_path = public
+as $$
+  select business_id
+    from public.business_members
+   where user_id = auth.uid()
+     and role = 'owner';
+$$;
+
+alter table public.business_invites enable row level security;
+
+drop policy if exists inv_owner_read on public.business_invites;
+create policy inv_owner_read on public.business_invites
+  for select using (business_id in (select public.my_owner_business_ids()));
+
+drop policy if exists inv_owner_insert on public.business_invites;
+create policy inv_owner_insert on public.business_invites
+  for insert with check (business_id in (select public.my_owner_business_ids()));
+
+-- UPDATE is required because AuthRepository.inviteMember() uses upsert
+-- (INSERT ... ON CONFLICT DO UPDATE); without it, re-inviting an email
+-- that already has a pending invite would fail.
+drop policy if exists inv_owner_update on public.business_invites;
+create policy inv_owner_update on public.business_invites
+  for update using (business_id in (select public.my_owner_business_ids()))
+  with check (business_id in (select public.my_owner_business_ids()));
+
+drop policy if exists inv_owner_delete on public.business_invites;
+create policy inv_owner_delete on public.business_invites
+  for delete using (business_id in (select public.my_owner_business_ids()));
+
+-- handle_new_user() is SECURITY DEFINER, so it still reads and deletes
+-- the invite row during signup regardless of these policies.
+
+-- Constrain role to the values the app actually understands. The original
+-- comment on business_members.role said "owner | accountant | staff", but
+-- nothing ever wrote those; the app ships owner + chef. Guarded so that
+-- re-running this on a database with unexpected roles reports instead of
+-- failing the whole script.
+do $$
+begin
+  if exists (
+    select 1 from public.business_members where role not in ('owner', 'chef')
+  ) then
+    raise notice
+      'SKIPPED business_members role CHECK — unexpected role values present. Inspect with: select role, count(*) from public.business_members group by 1;';
+  else
+    alter table public.business_members
+      drop constraint if exists business_members_role_check;
+    alter table public.business_members
+      add constraint business_members_role_check check (role in ('owner', 'chef'));
+  end if;
+
+  if exists (
+    select 1 from public.business_invites where role not in ('owner', 'chef')
+  ) then
+    raise notice
+      'SKIPPED business_invites role CHECK — unexpected role values present.';
+  else
+    alter table public.business_invites
+      drop constraint if exists business_invites_role_check;
+    alter table public.business_invites
+      add constraint business_invites_role_check check (role in ('owner', 'chef'));
+  end if;
+end $$;

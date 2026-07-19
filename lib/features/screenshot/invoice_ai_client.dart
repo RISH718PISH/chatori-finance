@@ -32,13 +32,23 @@ class InvoiceAiClient {
     final file = File(localPath);
     final bytes = await file.readAsBytes();
 
-    final res = await _client.functions.invoke(
-      _functionName,
-      body: {
-        'image_base64': base64Encode(bytes),
-        'media_type': _mediaTypeFor(localPath),
-      },
-    );
+    final FunctionResponse res;
+    try {
+      res = await _client.functions.invoke(
+        _functionName,
+        body: {
+          'image_base64': base64Encode(bytes),
+          'media_type': _mediaTypeFor(localPath),
+        },
+      );
+    } on FunctionException catch (e) {
+      // A non-2xx from the function arrives as an exception, NOT as
+      // res.data. Without this branch every configuration problem — a bad
+      // API key, no credit — was swallowed by the caller's catch-all and
+      // silently degraded to the offline parser, which is exactly the
+      // failure the user cannot diagnose.
+      throw InvoiceParseException(_friendlyError(_asMap(e.details)));
+    }
 
     final data = res.data;
     if (data is! Map) {
@@ -51,6 +61,18 @@ class InvoiceAiClient {
       throw InvoiceParseException(_friendlyError(map));
     }
     return AiParsedInvoice.fromJson(map);
+  }
+
+  Map<String, dynamic> _asMap(Object? details) {
+    if (details is Map) return Map<String, dynamic>.from(details);
+    if (details is String) {
+      try {
+        final decoded = jsonDecode(details);
+        if (decoded is Map) return Map<String, dynamic>.from(decoded);
+      } catch (_) {/* fall through */}
+      return {'error': details};
+    }
+    return {'error': details?.toString() ?? 'Unknown error'};
   }
 
   /// Cloud parse with a graceful degrade to the legacy on-device parser.
@@ -115,20 +137,33 @@ class InvoiceAiClient {
 
   String _friendlyError(Map<String, dynamic> map) {
     final err = map['error']?.toString() ?? 'Unknown error';
+    final detail = map['detail']?.toString() ?? '';
     final status = map['status'];
+    final haystack = '$err $detail';
+
     if (err.contains('ANTHROPIC_API_KEY')) {
-      return 'The invoice reader is not configured yet. Add ANTHROPIC_API_KEY '
-          'under Supabase → Edge Functions → Secrets.';
+      return 'The invoice reader is not set up yet. Add a secret named '
+          'ANTHROPIC_API_KEY under Supabase → Edge Functions → Secrets.';
     }
-    if (status == 401 || status == 403) {
-      return 'The Anthropic API key was rejected. Check it is valid and active.';
+    if (haystack.contains('invalid x-api-key') ||
+        haystack.contains('authentication_error') ||
+        status == 401 ||
+        status == 403) {
+      return 'Anthropic rejected the API key. The saved value is not a valid '
+          'key — real ones begin with "sk-ant-api03-". Create one at '
+          'console.anthropic.com and re-save the ANTHROPIC_API_KEY secret.';
+    }
+    if (haystack.contains('credit') || haystack.contains('billing')) {
+      return 'The Anthropic account has no credit left. Top it up in the '
+          'Anthropic console, then try again.';
     }
     if (status == 429) {
       return 'Rate limited by Anthropic. Wait a moment and try again.';
     }
-    if (status == 400 && err.contains('credit')) {
-      return 'Anthropic account is out of credit. Top up in the Anthropic console.';
+    if (status == 404) {
+      return 'The invoice reader is not deployed. Run: '
+          'supabase functions deploy parse-invoice';
     }
-    return err;
+    return detail.isEmpty ? err : '$err — $detail';
   }
 }

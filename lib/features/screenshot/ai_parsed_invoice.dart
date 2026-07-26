@@ -10,7 +10,9 @@ class AiInvoiceItem {
   final String description;
   final String? hsn;
   final double? qty;
-  final String? unit; // kg | g | l | ml | pcs | dozen | packet
+  // kg | g | l | ml | pcs | dozen. Deliberately no 'packet' — see
+  // lib/core/quantity.dart: a packet is a pack size, not a unit.
+  final String? unit;
   final int? unitPricePaise;
   final int amountPaise;
   final String category;

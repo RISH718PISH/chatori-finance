@@ -59,16 +59,27 @@ class Quantity {
   /// real invoices ("Kg", "KG", "gm", "ltr", "nos", "pc"). Returns null
   /// when the text is not a recognisable unit — callers should treat that
   /// as "quantity unknown" rather than guessing.
+  ///
+  /// Note the deliberate omissions: `pack`, `packet`, `box` and `bag` are
+  /// pack SIZES, not units, and are left unrecognised on purpose. Mapping a
+  /// pack count to `pcs` would give an item whose stock reads "3" while
+  /// consumption wants grams.
   static QtyUnit? unitFromSymbol(String? raw) {
     if (raw == null) return null;
-    final s = raw.trim().toLowerCase().replaceAll('.', '');
+    // Strip a leading "per " so the UoM values on real Hyperpure invoices
+    // ("Per piece") resolve rather than falling through to null.
+    final s = raw
+        .trim()
+        .toLowerCase()
+        .replaceAll('.', '')
+        .replaceFirst(RegExp(r'^per\s+'), '');
     return switch (s) {
       'kg' || 'kgs' || 'kilogram' || 'kilograms' => kg,
       'g' || 'gm' || 'gms' || 'gram' || 'grams' => g,
       'l' || 'ltr' || 'ltrs' || 'litre' || 'litres' || 'liter' => l,
       'ml' || 'mls' || 'millilitre' || 'milliliter' => ml,
       'pcs' || 'pc' || 'piece' || 'pieces' || 'nos' || 'no' || 'unit' ||
-      'units' =>
+      'units' || 'count' || 'each' || 'ea' =>
         pcs,
       'dozen' || 'dz' || 'doz' => dozen,
       _ => null,

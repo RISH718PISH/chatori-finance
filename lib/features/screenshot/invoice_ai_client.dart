@@ -141,24 +141,31 @@ class InvoiceAiClient {
     final status = map['status'];
     final haystack = '$err $detail';
 
-    if (err.contains('ANTHROPIC_API_KEY')) {
-      return 'The invoice reader is not set up yet. Add a secret named '
-          'ANTHROPIC_API_KEY under Supabase → Edge Functions → Secrets.';
+    if (err.contains('GEMINI_API_KEY')) {
+      return 'The invoice reader is not set up yet. Get a free key at '
+          'aistudio.google.com/apikey and save it as GEMINI_API_KEY under '
+          'Supabase → Edge Functions → Secrets.';
     }
-    if (haystack.contains('invalid x-api-key') ||
-        haystack.contains('authentication_error') ||
+    if (haystack.contains('API_KEY_INVALID') ||
+        haystack.contains('API key not valid') ||
+        haystack.contains('PERMISSION_DENIED') ||
         status == 401 ||
         status == 403) {
-      return 'Anthropic rejected the API key. The saved value is not a valid '
-          'key — real ones begin with "sk-ant-api03-". Create one at '
-          'console.anthropic.com and re-save the ANTHROPIC_API_KEY secret.';
+      return 'Google rejected the API key. Create a fresh one at '
+          'aistudio.google.com/apikey and re-save the GEMINI_API_KEY secret.';
     }
-    if (haystack.contains('credit') || haystack.contains('billing')) {
-      return 'The Anthropic account has no credit left. Top it up in the '
-          'Anthropic console, then try again.';
+    if (haystack.contains('RESOURCE_EXHAUSTED') || status == 429) {
+      return 'The free daily limit for the invoice reader has been reached. '
+          'Try again later, or enter this bill by hand.';
     }
-    if (status == 429) {
-      return 'Rate limited by Anthropic. Wait a moment and try again.';
+    if (haystack.contains('finishReason=MAX_TOKENS')) {
+      return 'That invoice is too long to read in one go. Photograph it in '
+          'two halves and scan each separately.';
+    }
+    if (haystack.contains('finishReason=SAFETY') ||
+        haystack.contains('finishReason=PROHIBITED')) {
+      return 'The reader refused that image. Re-take the photo showing only '
+          'the bill.';
     }
     if (status == 404) {
       return 'The invoice reader is not deployed. Run: '

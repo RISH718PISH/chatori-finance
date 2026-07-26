@@ -14,10 +14,23 @@ void main() {
       expect(Quantity.unitFromSymbol('Doz'), Quantity.dozen);
     });
 
-    test('returns null for unknown units rather than guessing', () {
-      // "packet" is deliberately NOT a unit — it is a pack size.
+    test('recognises the UoM words on a real Hyperpure invoice', () {
+      // The actual bill uses these three in its UoM column.
+      expect(Quantity.unitFromSymbol('Count'), Quantity.pcs);
+      expect(Quantity.unitFromSymbol('Per piece'), Quantity.pcs);
+      expect(Quantity.unitFromSymbol('per pc'), Quantity.pcs);
+      expect(Quantity.unitFromSymbol('Each'), Quantity.pcs);
+      expect(Quantity.unitFromSymbol('ea'), Quantity.pcs);
+    });
+
+    test('returns null for pack sizes rather than guessing', () {
+      // These are pack SIZES, not units. Mapping "Pack" to pcs would give an
+      // item whose stock reads "3" while consumption wants grams — the exact
+      // failure quantity.dart's doc comment warns about.
       expect(Quantity.unitFromSymbol('packet'), isNull);
+      expect(Quantity.unitFromSymbol('Pack'), isNull);
       expect(Quantity.unitFromSymbol('box'), isNull);
+      expect(Quantity.unitFromSymbol('bag'), isNull);
       expect(Quantity.unitFromSymbol(''), isNull);
       expect(Quantity.unitFromSymbol(null), isNull);
     });

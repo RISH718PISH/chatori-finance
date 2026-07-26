@@ -5,11 +5,110 @@ import 'package:intl/intl.dart';
 
 import '../../core/design.dart';
 import '../../core/money.dart';
+import '../../core/permissions.dart';
 import '../../data/models/txn.dart';
+import '../inventory/chef_home_screen.dart';
 import '../transaction/transaction_providers.dart';
 
+/// Role dispatcher for `/`.
+///
+/// A go_router `redirect` would look like the obvious way to keep a chef
+/// out of the finance screens, and it fails on the case that matters:
+/// owner A signs out from `/reports`, AuthGate swaps in SignInScreen, chef
+/// B signs in, AuthGate returns the child — and the router is STILL at
+/// `/reports` with no navigation event, so `redirect` never re-runs. B sees
+/// the Reports screen until they happen to navigate.
+///
+/// Dispatching here instead means AuthGate's rebuild re-evaluates this
+/// `ref.watch`, so the wrong screen cannot survive a user change. Routing
+/// was never the security boundary anyway — there is no URL bar on
+/// Android, and RLS is what actually stops a chef reading money.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final membership = ref.watch(membershipProvider);
+
+    return membership.when(
+      // Deliberately a blank scaffold rather than the finance home: showing
+      // money for even one frame to someone who may be a chef is the exact
+      // leak this screen exists to prevent.
+      loading: () => const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => Scaffold(
+        appBar: AppBar(title: const Text('Chatori Finance')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text('Could not load your account: $e',
+                textAlign: TextAlign.center),
+          ),
+        ),
+      ),
+      data: (m) => switch (m?.role ?? Role.unknown) {
+        Role.owner => const FinanceHomeScreen(),
+        Role.chef => const ChefHomeScreen(),
+        Role.unknown => const _NoAccessScreen(),
+      },
+    );
+  }
+}
+
+/// Signed in, but not a member of any business — the gap between signing up
+/// and an owner adding you. Failing closed with an explanation beats an
+/// empty finance screen that looks broken.
+class _NoAccessScreen extends ConsumerWidget {
+  const _NoAccessScreen();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final email = ref.watch(authRepoProvider).currentUser?.email ?? '';
+    return Scaffold(
+      appBar: AppBar(title: const Text('Chatori Finance')),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.lock_outline,
+                  size: 56, color: Theme.of(context).colorScheme.outline),
+              const SizedBox(height: 16),
+              Text('No access yet',
+                  style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              Text(
+                'You are signed in as $email but are not part of any books '
+                'yet. Ask an owner to add you, then reopen the app.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 20),
+              OutlinedButton.icon(
+                onPressed: () => ref.invalidate(membershipProvider),
+                icon: const Icon(Icons.refresh),
+                label: const Text('Check again'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  await ref.read(authRepoProvider).signOut();
+                  ref.invalidate(membershipProvider);
+                },
+                child: const Text('Sign out'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The owner's home — everything the app used to show at `/`.
+class FinanceHomeScreen extends ConsumerWidget {
+  const FinanceHomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

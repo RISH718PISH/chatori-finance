@@ -9,6 +9,7 @@ import '../features/home/home_screen.dart';
 import '../features/reports/reports_screen.dart';
 import '../features/salary/salary_screen.dart';
 import '../features/screenshot/screenshot_import_screen.dart';
+import '../features/settings/members_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/transaction/add_transaction_screen.dart';
 import '../features/transaction/bulk_add_screen.dart';
@@ -67,5 +68,6 @@ final appRouter = GoRouter(
     GoRoute(path: '/import', builder: (_, _) => const ScreenshotImportScreen()),
     GoRoute(path: '/reports', builder: (_, _) => const ReportsScreen()),
     GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
+    GoRoute(path: '/members', builder: (_, _) => const MembersScreen()),
   ],
 );

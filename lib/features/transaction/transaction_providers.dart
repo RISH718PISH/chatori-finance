@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/permissions.dart';
 import '../../data/models/txn.dart';
 import '../../data/supabase/attachment_repository.dart';
 import '../../data/supabase/auth_repository.dart';
@@ -37,10 +38,61 @@ final authChangeProvider = StreamProvider<AuthState>(
   (ref) => ref.watch(authRepoProvider).onAuthChange,
 );
 
-/// The current user's business id. Cached for the session — stable across
-/// token refreshes so dependent screens don't reload on every auth tick.
-final businessIdProvider = FutureProvider<String?>((ref) {
-  return ref.watch(authRepoProvider).currentBusinessId();
+/// The signed-in user's id, recomputed on every auth event.
+///
+/// Everything user-scoped derives from this, so a user change cascades
+/// automatically and no manual invalidation is needed anywhere. That
+/// matters because invalidation used to hang off the Sign out button — the
+/// only caller of `signOut()` — while Supabase also ends sessions on its
+/// own (refresh-token failure, password changed elsewhere), and those paths
+/// cleared nothing. RLS masked it: user B just saw empty lists. With roles,
+/// the role IS the authorization input, so a stale one would hand B user
+/// A's interface.
+///
+/// Token refreshes fire constantly, but a `Provider` only notifies
+/// dependents when its value actually changes — so a refresh that keeps the
+/// same uid costs nothing downstream.
+final currentUserIdProvider = Provider<String?>((ref) {
+  ref.watch(authChangeProvider);
+  return ref.watch(authRepoProvider).currentUser?.id;
+});
+
+/// The signed-in user's business, role and display name — one row, one
+/// query, so role and data can never come from different businesses.
+final membershipProvider = FutureProvider<Membership?>((ref) async {
+  final uid = ref.watch(currentUserIdProvider);
+  if (uid == null) return null;
+  return ref.watch(authRepoProvider).currentMembership();
+});
+
+/// The current user's role. [Role.unknown] while loading or when the user
+/// has no membership row yet (the gap between signup and being added to a
+/// business) — so callers fail closed rather than throwing.
+final myRoleProvider = Provider<Role>((ref) {
+  return ref.watch(membershipProvider).asData?.value?.role ?? Role.unknown;
+});
+
+/// True only once membership has actually resolved. Screens use this to
+/// show a spinner instead of briefly rendering the wrong role's UI.
+final membershipReadyProvider = Provider<bool>((ref) {
+  return ref.watch(membershipProvider).hasValue;
+});
+
+bool hasPermission(WidgetRef ref, Permission p) =>
+    ref.watch(myRoleProvider).can(p);
+
+/// The current user's business id. Derived from [membershipProvider] so the
+/// dozens of existing call sites are untouched.
+final businessIdProvider = FutureProvider<String?>((ref) async {
+  return (await ref.watch(membershipProvider.future))?.businessId;
+});
+
+/// Everyone in the business, with roles. Owner-facing.
+final businessMemberListProvider =
+    FutureProvider<List<BusinessMember>>((ref) async {
+  final biz = await ref.watch(businessIdProvider.future);
+  if (biz == null) return const [];
+  return ref.watch(authRepoProvider).fetchMembers(biz);
 });
 
 /// Cached one-shot fetch of the recent transactions for this business.

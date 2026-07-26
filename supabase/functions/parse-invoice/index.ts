@@ -20,9 +20,21 @@
 // Secret:  supabase secrets set GEMINI_API_KEY=...   (free key from
 //          https://aistudio.google.com/apikey)
 
-const MODEL = "gemini-2.5-flash";
-const GEMINI_URL =
-  `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
+// Pinned rather than using the `gemini-flash-latest` alias, so extraction
+// behaviour cannot change under us without a deploy.
+//
+// Google DOES retire pinned names — gemini-2.5-flash started returning
+// "no longer available to new users" — so FALLBACK_MODEL is the moving
+// alias and is tried once if the pinned name 404s. That turns a retirement
+// from an outage into a log line.
+//
+// To see what this key can actually use:
+//   POST {"list_models": true}
+const MODEL = "gemini-3.6-flash";
+const FALLBACK_MODEL = "gemini-flash-latest";
+
+const endpointFor = (model: string) =>
+  `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
 // Must stay in sync with kSeedCategories in lib/core/categories.dart.
 // Passed to the model so suggested_category is always a value the app
@@ -255,45 +267,79 @@ Deno.serve(async (req: Request) => {
 
   let imageBase64: string;
   let mediaType: string;
+  let listModels = false;
   try {
     const body = await req.json();
+    listModels = body.list_models === true;
     imageBase64 = body.image_base64;
     mediaType = body.media_type ?? "image/jpeg";
-    if (!imageBase64 || typeof imageBase64 !== "string") {
+    if (!listModels && (!imageBase64 || typeof imageBase64 !== "string")) {
       return json({ error: "image_base64 is required" }, 400);
     }
   } catch (_) {
     return json({ error: "Invalid JSON body" }, 400);
   }
 
-  let aiRes: Response;
-  try {
-    aiRes = await fetch(GEMINI_URL, {
+  // Diagnostic: `{"list_models": true}` returns the vision-capable models
+  // this key can actually use. Google retires model names over time — this
+  // exists so the correct name can be looked up instead of guessed.
+  if (listModels) {
+    const lr = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models?pageSize=200",
+      { headers: { "x-goog-api-key": apiKey } },
+    );
+    if (!lr.ok) {
+      return json({ error: "ListModels failed", detail: await lr.text() }, 502);
+    }
+    const lp = await lr.json();
+    const usable = (lp.models ?? [])
+      .filter((m: { supportedGenerationMethods?: string[] }) =>
+        (m.supportedGenerationMethods ?? []).includes("generateContent")
+      )
+      .map((m: { name: string }) => m.name.replace(/^models\//, ""));
+    return json({ current_model: MODEL, usable_models: usable });
+  }
+
+  const requestBody = JSON.stringify({
+    systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+    contents: [{
+      role: "user",
+      parts: [
+        { inline_data: { mime_type: mediaType, data: imageBase64 } },
+        { text: "Extract every genuine purchased product from this invoice." },
+      ],
+    }],
+    generationConfig: {
+      temperature: 0,
+      responseMimeType: "application/json",
+      responseSchema: RESPONSE_SCHEMA,
+      maxOutputTokens: 8192,
+    },
+  });
+
+  const callModel = (model: string) =>
+    fetch(endpointFor(model), {
       method: "POST",
       headers: {
         "x-goog-api-key": apiKey,
         "content-type": "application/json",
       },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents: [{
-          role: "user",
-          parts: [
-            { inline_data: { mime_type: mediaType, data: imageBase64 } },
-            {
-              text:
-                "Extract every genuine purchased product from this invoice.",
-            },
-          ],
-        }],
-        generationConfig: {
-          temperature: 0,
-          responseMimeType: "application/json",
-          responseSchema: RESPONSE_SCHEMA,
-          maxOutputTokens: 8192,
-        },
-      }),
+      body: requestBody,
     });
+
+  let aiRes: Response;
+  let usedModel = MODEL;
+  try {
+    aiRes = await callModel(MODEL);
+    // A retired pinned model returns 404 NOT_FOUND. Retry once on the moving
+    // alias so a retirement degrades to a log line instead of an outage.
+    if (aiRes.status === 404) {
+      console.warn(
+        `Model ${MODEL} returned 404; retrying on ${FALLBACK_MODEL}. Update MODEL.`,
+      );
+      aiRes = await callModel(FALLBACK_MODEL);
+      usedModel = FALLBACK_MODEL;
+    }
   } catch (e) {
     return json({ error: `Could not reach Gemini: ${e}` }, 502);
   }
@@ -375,7 +421,7 @@ Deno.serve(async (req: Request) => {
       difference_paise: totalPaise === null ? null : totalPaise - itemsSum,
       balanced: totalPaise !== null && totalPaise === itemsSum,
     },
-    model: MODEL,
+    model: usedModel,
     usage: payload.usageMetadata ?? null,
   });
 });

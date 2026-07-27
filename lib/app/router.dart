@@ -6,6 +6,11 @@ import '../features/customers/customers_screen.dart';
 import '../features/events/event_detail_screen.dart';
 import '../features/events/events_screen.dart';
 import '../features/home/home_screen.dart';
+import '../features/inventory/consumption_entry_screen.dart';
+import '../features/inventory/inventory_report_screen.dart';
+import '../features/inventory/inventory_screen.dart';
+import '../features/inventory/item_detail_screen.dart';
+import '../features/inventory/opening_stock_screen.dart';
 import '../features/reports/reports_screen.dart';
 import '../features/salary/salary_screen.dart';
 import '../features/screenshot/screenshot_import_screen.dart';
@@ -69,5 +74,23 @@ final appRouter = GoRouter(
     GoRoute(path: '/reports', builder: (_, _) => const ReportsScreen()),
     GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
     GoRoute(path: '/members', builder: (_, _) => const MembersScreen()),
+    GoRoute(path: '/inventory', builder: (_, _) => const InventoryScreen()),
+    GoRoute(
+      path: '/inventory/consumption',
+      builder: (_, _) => const ConsumptionEntryScreen(),
+    ),
+    GoRoute(
+      path: '/inventory/opening',
+      builder: (_, _) => const OpeningStockScreen(),
+    ),
+    GoRoute(
+      path: '/inventory/report',
+      builder: (_, _) => const InventoryReportScreen(),
+    ),
+    GoRoute(
+      path: '/inventory/item/:id',
+      builder: (_, state) =>
+          ItemDetailScreen(itemId: state.pathParameters['id']!),
+    ),
   ],
 );

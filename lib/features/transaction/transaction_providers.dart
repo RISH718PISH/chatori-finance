@@ -95,6 +95,13 @@ final businessMemberListProvider =
   return ref.watch(authRepoProvider).fetchMembers(biz);
 });
 
+/// True when the signed-in user is an owner. Used only to avoid rendering
+/// money widgets that would resolve empty for a chef anyway — the real
+/// protection is the owner-only RLS on the finance and valuation tables.
+final isOwnerProvider = Provider<bool>((ref) {
+  return ref.watch(myRoleProvider) == Role.owner;
+});
+
 /// Cached one-shot fetch of the recent transactions for this business.
 /// Refreshed via [refreshTransactions] after any save.
 final businessTxnsProvider = FutureProvider<List<Txn>>((ref) async {

@@ -9,7 +9,11 @@ import '../../core/categories.dart';
 import '../../core/design.dart';
 import '../../core/money.dart';
 import '../../core/quantity.dart';
+import '../../data/supabase/purchase_invoice_repository.dart';
 import '../events/events_providers.dart';
+import '../inventory/inventory_providers.dart';
+import '../inventory/item_matcher.dart';
+import '../inventory/widgets/item_picker_sheet.dart';
 import '../transaction/transaction_providers.dart';
 import 'ai_parsed_invoice.dart';
 
@@ -54,6 +58,10 @@ class _InvoiceReviewScreenState extends ConsumerState<InvoiceReviewScreen> {
   /// difference structurally zero and meant no warning could ever fire in
   /// exactly the case where parsing had failed worst.
   int? _billTotalPaise;
+
+  /// User overrides for how a row maps to stock, keyed by row id. A row
+  /// with no entry falls back to the automatic match computed in build().
+  final Map<int, StockMatch> _stockChoice = {};
 
   String _paymentMode = 'Bank';
   late DateTime _date;
@@ -175,6 +183,23 @@ class _InvoiceReviewScreenState extends ConsumerState<InvoiceReviewScreen> {
     );
   }
 
+  /// The stock decision for a row: the user's override if set, else the
+  /// automatic match from [matcher].
+  StockMatch _matchFor(_Row r, ItemMatcher matcher) {
+    final override = _stockChoice[r.id];
+    if (override != null) return override;
+    return matcher.match(
+      r.item.description,
+      hasUnit: lineHasStorableUnit(r.item.unit, r.item.qty),
+    );
+  }
+
+  StockTarget _targetFor(StockMatch m) => switch (m.kind) {
+        StockMatchKind.matched => StockTarget.matched(m.itemId!),
+        StockMatchKind.newItem => StockTarget.create(m.suggestedName!),
+        StockMatchKind.untracked => const StockTarget.untracked(),
+      };
+
   Future<void> _save() async {
     if (!_canSave) return;
     setState(() => _saving = true);
@@ -195,6 +220,15 @@ class _InvoiceReviewScreenState extends ConsumerState<InvoiceReviewScreen> {
             );
       }
 
+      final matcher = ItemMatcher(
+        items: ref.read(inventoryItemsProvider).asData?.value ?? const [],
+        aliases: ref.read(itemAliasesProvider).asData?.value ?? const [],
+      );
+      final matches = [for (final r in _rows) _matchFor(r, matcher)];
+      final targets = [for (final m in matches) _targetFor(m)];
+      final tracked = matches.where((m) => m.tracks).length;
+      final skipped = _rows.length - tracked;
+
       final party = _partyCtl.text.trim();
       await ref.read(purchaseInvoiceRepoProvider).save(
             businessId: biz,
@@ -205,16 +239,18 @@ class _InvoiceReviewScreenState extends ConsumerState<InvoiceReviewScreen> {
             partyName: party.isEmpty ? null : party,
             eventId: _eventId,
             attachmentPath: attachmentPath,
+            stockTargets: targets,
           );
 
       refreshTransactions(ref);
+      refreshInventory(ref);
       if (!mounted) return;
       messenger.showSnackBar(SnackBar(
         behavior: SnackBarBehavior.floating,
         backgroundColor: AppSemantics.income,
         content: Text(
-          'Saved ${_rows.length} items · ${_rollup.length} categories · '
-          '${Money.format(_itemsSum)}',
+          'Saved ${_rows.length} items · ${Money.format(_itemsSum)} — '
+          '$tracked added to stock${skipped > 0 ? ', $skipped not tracked' : ''}',
           style: const TextStyle(color: Colors.white),
         ),
       ));
@@ -227,6 +263,41 @@ class _InvoiceReviewScreenState extends ConsumerState<InvoiceReviewScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  /// Rebuilt each frame from the catalogue providers. While they load it is
+  /// simply an empty matcher (everything reads as a new item), which
+  /// self-corrects once the data arrives.
+  ItemMatcher get _matcher => ItemMatcher(
+        items: ref.watch(inventoryItemsProvider).asData?.value ?? const [],
+        aliases: ref.watch(itemAliasesProvider).asData?.value ?? const [],
+      );
+
+  Future<void> _editStock(_Row r) async {
+    final result = await showItemPicker(
+      context,
+      ref,
+      seedName: ItemMatcher.cleanName(r.item.description),
+      seedDimension: parseQuantity(r.item.qty, r.item.unit)?.dimension,
+      seedUnit: r.item.unit,
+      seedCategory: r.item.category,
+    );
+    if (result == null) return;
+    setState(() {
+      _stockChoice[r.id] =
+          StockMatch.matched(result.item.id, result.item.name);
+    });
+  }
+
+  void _toggleTrack(_Row r) {
+    setState(() {
+      final current = _matchFor(r, _matcher);
+      _stockChoice[r.id] = current.kind == StockMatchKind.untracked
+          // Re-enable: fall back to the automatic match by clearing the
+          // override, unless there's no unit, in which case it stays off.
+          ? _matcher.match(r.item.description, hasUnit: true)
+          : const StockMatch.untracked();
+    });
   }
 
   // ── Build ──────────────────────────────────────────────────
@@ -308,8 +379,11 @@ class _InvoiceReviewScreenState extends ConsumerState<InvoiceReviewScreen> {
               index: i,
               item: _rows[i].item,
               categories: _categories,
+              stockMatch: _matchFor(_rows[i], _matcher),
               onChanged: (it) => setState(() => _rows[i].item = it),
               onRemove: () => setState(() => _rows.removeAt(i)),
+              onEditStock: () => _editStock(_rows[i]),
+              onToggleTrack: () => _toggleTrack(_rows[i]),
             ),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
@@ -594,15 +668,21 @@ class _ItemCard extends StatefulWidget {
     required this.index,
     required this.item,
     required this.categories,
+    required this.stockMatch,
     required this.onChanged,
     required this.onRemove,
+    required this.onEditStock,
+    required this.onToggleTrack,
   });
 
   final int index;
   final AiInvoiceItem item;
   final List<SeedCategory> categories;
+  final StockMatch stockMatch;
   final ValueChanged<AiInvoiceItem> onChanged;
   final VoidCallback onRemove;
+  final VoidCallback onEditStock;
+  final VoidCallback onToggleTrack;
 
   @override
   State<_ItemCard> createState() => _ItemCardState();
@@ -765,10 +845,71 @@ class _ItemCardState extends State<_ItemCard> {
                   ),
                 ],
               ),
+              const SizedBox(height: 6),
+              _stockLine(context),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  /// The "→ Stock" line: shows how this row will affect inventory and lets
+  /// the user change the target or opt the line out.
+  Widget _stockLine(BuildContext context) {
+    final m = widget.stockMatch;
+    final (IconData icon, String label, Color color) = switch (m.kind) {
+      StockMatchKind.matched => (
+          Icons.link,
+          'Stock: ${m.itemName}',
+          AppSemantics.income,
+        ),
+      StockMatchKind.newItem => (
+          Icons.add_circle_outline,
+          'Stock: new "${m.suggestedName}"',
+          Theme.of(context).colorScheme.primary,
+        ),
+      StockMatchKind.untracked => (
+          Icons.block,
+          'Not added to stock',
+          Theme.of(context).hintColor,
+        ),
+    };
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: color),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: color)),
+        ),
+        if (m.kind != StockMatchKind.untracked)
+          TextButton(
+            onPressed: widget.onEditStock,
+            style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 8)),
+            child: const Text('Change'),
+          ),
+        IconButton(
+          tooltip: m.kind == StockMatchKind.untracked
+              ? 'Add to stock'
+              : "Don't add to stock",
+          visualDensity: VisualDensity.compact,
+          icon: Icon(
+            m.kind == StockMatchKind.untracked
+                ? Icons.add_box_outlined
+                : Icons.not_interested,
+            size: 18,
+          ),
+          onPressed: widget.onToggleTrack,
+        ),
+      ],
     );
   }
 }

@@ -7,7 +7,7 @@ import '../../core/design.dart';
 import '../../core/money.dart';
 import '../../core/permissions.dart';
 import '../../data/models/txn.dart';
-import '../inventory/chef_home_screen.dart';
+import '../inventory/inventory_screen.dart';
 import '../transaction/transaction_providers.dart';
 
 /// Role dispatcher for `/`.
@@ -49,7 +49,7 @@ class HomeScreen extends ConsumerWidget {
       ),
       data: (m) => switch (m?.role ?? Role.unknown) {
         Role.owner => const FinanceHomeScreen(),
-        Role.chef => const ChefHomeScreen(),
+        Role.chef => const InventoryScreen(),
         Role.unknown => const _NoAccessScreen(),
       },
     );
@@ -254,6 +254,7 @@ class FinanceHomeScreen extends ConsumerWidget {
               _NavTile('Customers', Icons.people_alt_outlined, '/customers'),
               _NavTile('Vendors', Icons.store_outlined, '/vendors'),
               _NavTile('Scan bill', Icons.document_scanner_outlined, '/import'),
+              _NavTile('Stock', Icons.inventory_2_outlined, '/inventory'),
               _NavTile('Reports', Icons.bar_chart_outlined, '/reports'),
             ],
           ),

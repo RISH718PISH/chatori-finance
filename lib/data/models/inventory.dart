@@ -134,6 +134,9 @@ class StockMovement {
   final String? eventId;
   final String? invoiceItemId;
 
+  /// Total cost in paise for this movement's quantity. Null when unpriced.
+  final int? costPaise;
+
   const StockMovement({
     required this.id,
     required this.itemId,
@@ -143,6 +146,7 @@ class StockMovement {
     this.note,
     this.eventId,
     this.invoiceItemId,
+    this.costPaise,
   });
 
   factory StockMovement.fromJson(Map<String, dynamic> j) => StockMovement(
@@ -154,6 +158,7 @@ class StockMovement {
         note: j['note'] as String?,
         eventId: j['event_id'] as String?,
         invoiceItemId: j['invoice_item_id'] as String?,
+        costPaise: (j['cost_paise'] as num?)?.toInt(),
       );
 }
 

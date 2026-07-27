@@ -93,11 +93,13 @@ const Map<Role, Set<Permission>> kRolePermissions = {
     Permission.manageMembers,
     Permission.manageSettings,
   },
-  // Deliberately narrow. Note the absence of viewInventoryValue: a chef sees
-  // how much stock there is, never what it cost.
+  // The chef runs the store, including its cost: stock value, average cost,
+  // and entering prices when counting or adding stock. Still no access to
+  // the finance side — income, P&L, reports, salaries, events.
   Role.chef: {
     Permission.viewInventory,
     Permission.recordConsumption,
+    Permission.viewInventoryValue,
   },
   // Fails closed.
   Role.unknown: {},

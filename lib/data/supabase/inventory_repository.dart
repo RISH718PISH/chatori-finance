@@ -100,6 +100,7 @@ class InventoryRepository {
     DateTime? occurredOn,
     String? note,
     String? eventId,
+    int? costPaise,
   }) async {
     await _client.from('stock_movements').insert({
       'business_id': businessId,
@@ -110,6 +111,7 @@ class InventoryRepository {
         'occurred_on': occurredOn.toIso8601String().substring(0, 10),
       'note': note,
       'event_id': eventId,
+      'cost_paise': costPaise,
       // created_by defaults to auth.uid() in the DB and is pinned there by
       // the insert policy, so it is deliberately not sent from the client.
     });

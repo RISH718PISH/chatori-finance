@@ -5,7 +5,7 @@
     <!-- Required by local_auth for the biometric prompt. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <application
-        android:label="Chatori Finance"
+        android:label="Chatori Kitchen"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

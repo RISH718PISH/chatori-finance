@@ -36,12 +36,15 @@ void main() {
       }
     });
 
-    test('chef can view stock and record consumption', () {
+    test('chef can view stock, record consumption, and see stock value', () {
       expect(Role.chef.can(Permission.viewInventory), isTrue);
       expect(Role.chef.can(Permission.recordConsumption), isTrue);
+      // The chef now runs the store's cost too (opted in by the owner).
+      expect(Role.chef.can(Permission.viewInventoryValue), isTrue);
     });
 
-    test('chef cannot reach money, reports, members or settings', () {
+    test('chef still cannot reach finance, reports, members or settings', () {
+      // Inventory cost is now allowed; the finance side stays walled off.
       const forbidden = [
         Permission.viewFinance,
         Permission.addTransaction,
@@ -54,14 +57,6 @@ void main() {
       for (final p in forbidden) {
         expect(Role.chef.can(p), isFalse, reason: '$p must be denied');
       }
-    });
-
-    test('chef sees stock quantities but never stock value', () {
-      // The distinction the whole module hangs on. Enforced in the database
-      // too — the valuation views read the owner-only purchase tables — but
-      // the UI must not offer it either.
-      expect(Role.chef.can(Permission.viewInventory), isTrue);
-      expect(Role.chef.can(Permission.viewInventoryValue), isFalse);
     });
 
     test('unknown has no permissions at all', () {

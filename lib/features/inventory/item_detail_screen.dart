@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/design.dart';
 import '../../core/money.dart';
+import '../../core/permissions.dart';
 import '../../core/quantity.dart';
 import '../../data/models/inventory.dart';
 import '../transaction/transaction_providers.dart';
@@ -18,7 +19,8 @@ class ItemDetailScreen extends ConsumerWidget {
     final onHand = ref.watch(stockOnHandProvider).asData?.value ?? const [];
     final matches = onHand.where((s) => s.itemId == itemId).toList();
     final movements = ref.watch(itemMovementsProvider(itemId));
-    final isOwner = ref.watch(isOwnerProvider);
+    final canViewValue =
+        ref.watch(myRoleProvider).can(Permission.viewInventoryValue);
     final values = ref.watch(stockValueProvider).asData?.value ?? const [];
 
     if (matches.isEmpty) {
@@ -36,11 +38,13 @@ class ItemDetailScreen extends ConsumerWidget {
         actions: [
           PopupMenuButton<String>(
             onSelected: (v) => switch (v) {
+              'addstock' => _addStock(context, ref, stock),
               'adjust' => _adjust(context, ref, stock),
               'wastage' => _wastage(context, ref, stock),
               _ => null,
             },
             itemBuilder: (_) => const [
+              PopupMenuItem(value: 'addstock', child: Text('Add stock')),
               PopupMenuItem(
                   value: 'adjust', child: Text('Correct to a counted amount')),
               PopupMenuItem(value: 'wastage', child: Text('Record wastage')),
@@ -82,7 +86,7 @@ class ItemDetailScreen extends ConsumerWidget {
                               : '—'),
                     ],
                   ),
-                  if (isOwner) ...[
+                  if (canViewValue) ...[
                     const Divider(height: 24),
                     Row(
                       children: [
@@ -151,6 +155,71 @@ class ItemDetailScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  /// Manually add stock not captured on a scanned bill — a cash purchase,
+  /// say. Quantity plus an optional total price, recorded as a priced
+  /// `purchase` movement so it flows into the average cost.
+  Future<void> _addStock(
+      BuildContext context, WidgetRef ref, StockOnHand stock) async {
+    final qtyCtl = TextEditingController();
+    final priceCtl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Add stock — ${stock.name}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: qtyCtl,
+              autofocus: true,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                labelText: 'Quantity',
+                suffixText: stock.displayUnit,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: priceCtl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'Price for this quantity (optional)',
+                prefixText: '₹ ',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Add')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final qty = double.tryParse(qtyCtl.text.trim());
+    if (qty == null || qty <= 0) return;
+    final price = double.tryParse(priceCtl.text.trim());
+    final biz = await ref.read(businessIdProvider.future);
+    if (biz == null) return;
+    await ref.read(inventoryRepoProvider).addMovement(
+          businessId: biz,
+          itemId: stock.itemId,
+          type: StockMovementType.purchase,
+          qtyMilli: Quantity.toMilli(qty, stock.unit),
+          costPaise:
+              (price != null && price > 0) ? (price * 100).round() : null,
+          note: 'Manual add',
+        );
+    refreshInventory(ref);
+    ref.invalidate(itemMovementsProvider(stock.itemId));
   }
 
   Future<void> _adjust(

@@ -27,7 +27,7 @@ class ChatoriApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'Chatori Finance',
+      title: 'Chatori Kitchen',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/design.dart';
 import '../../core/money.dart';
+import '../../core/permissions.dart';
 import '../../core/quantity.dart';
 import '../../data/models/inventory.dart';
 import '../transaction/transaction_providers.dart';
@@ -24,6 +25,8 @@ class InventoryScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(stockOnHandProvider);
     final low = ref.watch(lowStockProvider);
+    final canViewValue =
+        ref.watch(myRoleProvider).can(Permission.viewInventoryValue);
     final isOwner = ref.watch(isOwnerProvider);
     final valueTotal = ref.watch(stockValueTotalProvider);
 
@@ -76,7 +79,7 @@ class InventoryScreen extends ConsumerWidget {
                   children: [
                     _statCard(context, 'Items tracked', '${items.length}'),
                     const SizedBox(width: 12),
-                    if (isOwner)
+                    if (canViewValue)
                       _statCard(
                         context,
                         'Stock value',

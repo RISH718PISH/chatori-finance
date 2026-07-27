@@ -23,6 +23,7 @@ class OpeningStockScreen extends ConsumerStatefulWidget {
 
 class _OpeningStockScreenState extends ConsumerState<OpeningStockScreen> {
   final _controllers = <String, TextEditingController>{};
+  final _priceControllers = <String, TextEditingController>{};
   final _filled = ValueNotifier<int>(0);
   bool _saving = false;
 
@@ -37,9 +38,15 @@ class _OpeningStockScreenState extends ConsumerState<OpeningStockScreen> {
         return c;
       });
 
+  TextEditingController _priceCtl(String id) =>
+      _priceControllers.putIfAbsent(id, TextEditingController.new);
+
   @override
   void dispose() {
     for (final c in _controllers.values) {
+      c.dispose();
+    }
+    for (final c in _priceControllers.values) {
       c.dispose();
     }
     _filled.dispose();
@@ -60,12 +67,17 @@ class _OpeningStockScreenState extends ConsumerState<OpeningStockScreen> {
       final qty = double.tryParse(raw);
       final item = byId[e.key];
       if (qty == null || qty <= 0 || item == null) continue;
+      // Optional price: the total rupees paid for the counted quantity.
+      final priceRaw = _priceControllers[e.key]?.text.trim() ?? '';
+      final price = double.tryParse(priceRaw);
       rows.add({
         'business_id': biz,
         'item_id': e.key,
         'movement_type': 'opening',
         'qty_milli': Quantity.toMilli(qty, item.unit),
         'note': 'Opening count',
+        if (price != null && price > 0)
+          'cost_paise': (price * 100).round(),
       });
     }
     if (rows.isEmpty) {
@@ -152,8 +164,11 @@ class _OpeningStockScreenState extends ConsumerState<OpeningStockScreen> {
                 return ListView.builder(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
                   itemCount: items.length,
-                  itemBuilder: (_, i) =>
-                      _Row(item: items[i], controller: _ctl(items[i].id)),
+                  itemBuilder: (_, i) => _Row(
+                    item: items[i],
+                    controller: _ctl(items[i].id),
+                    priceController: _priceCtl(items[i].id),
+                  ),
                 );
               },
             ),
@@ -184,34 +199,63 @@ class _OpeningStockScreenState extends ConsumerState<OpeningStockScreen> {
 }
 
 class _Row extends StatelessWidget {
-  const _Row({required this.item, required this.controller});
+  const _Row({
+    required this.item,
+    required this.controller,
+    required this.priceController,
+  });
   final InventoryItem item;
   final TextEditingController controller;
+  final TextEditingController priceController;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(child: Text(item.name)),
-          SizedBox(
-            width: 90,
-            child: TextField(
-              controller: controller,
-              textAlign: TextAlign.end,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(
-                hintText: '0',
-                border: OutlineInputBorder(),
-                isDense: true,
+          Text(item.name),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              // Quantity + unit.
+              SizedBox(
+                width: 90,
+                child: TextField(
+                  controller: controller,
+                  textAlign: TextAlign.end,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Qty',
+                    hintText: '0',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: 6),
+              SizedBox(width: 34, child: Text(item.displayUnit)),
+              const SizedBox(width: 8),
+              // Optional total price for that quantity.
+              Expanded(
+                child: TextField(
+                  controller: priceController,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Price (optional)',
+                    prefixText: '₹ ',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          SizedBox(width: 34, child: Text(item.displayUnit)),
         ],
       ),
     );

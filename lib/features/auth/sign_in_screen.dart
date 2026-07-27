@@ -73,21 +73,13 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Logo sits on a white card because the PNG has a white
-                  // background (no transparency).
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    padding: const EdgeInsets.all(12),
-                    child: Image.asset(
-                      'assets/logo.png',
-                      height: 180,
-                      fit: BoxFit.contain,
-                    ),
+                  // Transparent logo sits directly on the theme background.
+                  Image.asset(
+                    'assets/Logo_Transparent.png',
+                    height: 190,
+                    fit: BoxFit.contain,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
                   Text(
                     _isSignUp ? 'Create your account' : 'Sign in to your books',
                     textAlign: TextAlign.center,

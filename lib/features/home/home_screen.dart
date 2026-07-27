@@ -119,15 +119,8 @@ class FinanceHomeScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          child: Image.asset('assets/logo.png', height: 46),
-        ),
-        toolbarHeight: 68,
+        title: Image.asset('assets/Logo_Transparent.png', height: 48),
+        toolbarHeight: 70,
         actions: [
           IconButton(
             icon: const Icon(Icons.settings_outlined),

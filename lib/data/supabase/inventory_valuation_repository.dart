@@ -34,4 +34,30 @@ class InventoryValuationRepository {
         .eq('month', month);
     return rows.map(ConsumptionRow.fromJson).toList();
   }
+
+  /// Consumption grouped by reason (Zomato / Swiggy / Catering …), valued.
+  Future<List<ReasonValue>> fetchConsumptionByReason({
+    required String businessId,
+    required String month,
+  }) async {
+    final rows = await _client
+        .from('v_consumption_by_reason_month')
+        .select()
+        .eq('business_id', businessId)
+        .eq('month', month);
+    return rows.map(ReasonValue.fromJson).toList();
+  }
+
+  /// Wastage grouped by reason for the month, valued.
+  Future<List<ReasonValue>> fetchWastageByReason({
+    required String businessId,
+    required String month,
+  }) async {
+    final rows = await _client
+        .from('v_wastage_by_month')
+        .select()
+        .eq('business_id', businessId)
+        .eq('month', month);
+    return rows.map(ReasonValue.fromJson).toList();
+  }
 }

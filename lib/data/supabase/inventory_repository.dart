@@ -127,6 +127,22 @@ class InventoryRepository {
     await _client.from('stock_movements').insert(rows);
   }
 
+  /// Latest movements across the whole business, newest first — the
+  /// "what changed and when" feed. Server-limited; never fetch the whole
+  /// ledger.
+  Future<List<StockActivity>> fetchRecentActivity(String businessId,
+      {int limit = 40}) async {
+    final rows = await _client
+        .from('stock_movements')
+        .select(
+            'movement_type, qty_milli, created_at, created_by, reason, note, '
+            'inventory_items(name, dimension)')
+        .eq('business_id', businessId)
+        .order('created_at', ascending: false)
+        .limit(limit);
+    return rows.map(StockActivity.fromJson).toList();
+  }
+
   // ── Aliases ──────────────────────────────────────────────────
   Future<List<ItemAlias>> fetchAliases(String businessId) async {
     final rows = await _client

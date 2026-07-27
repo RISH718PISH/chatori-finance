@@ -73,10 +73,39 @@ final consumptionForMonthProvider =
       .fetchConsumption(businessId: biz, month: month);
 });
 
+/// Recent movements across the business — the activity feed.
+final recentActivityProvider =
+    FutureProvider<List<StockActivity>>((ref) async {
+  final biz = await ref.watch(businessIdProvider.future);
+  if (biz == null) return const [];
+  return ref.watch(inventoryRepoProvider).fetchRecentActivity(biz);
+});
+
+/// Consumption by reason/channel for a YYYY-MM month, valued.
+final consumptionByReasonProvider =
+    FutureProvider.family<List<ReasonValue>, String>((ref, month) async {
+  final biz = await ref.watch(businessIdProvider.future);
+  if (biz == null) return const [];
+  return ref
+      .watch(inventoryValuationRepoProvider)
+      .fetchConsumptionByReason(businessId: biz, month: month);
+});
+
+/// Wastage by reason for a month, valued.
+final wastageByReasonProvider =
+    FutureProvider.family<List<ReasonValue>, String>((ref, month) async {
+  final biz = await ref.watch(businessIdProvider.future);
+  if (biz == null) return const [];
+  return ref
+      .watch(inventoryValuationRepoProvider)
+      .fetchWastageByReason(businessId: biz, month: month);
+});
+
 /// Invalidated after any stock write. Mirrors refreshTransactions/Books.
 void refreshInventory(WidgetRef ref) {
   ref.invalidate(stockOnHandProvider);
   ref.invalidate(inventoryItemsProvider);
   ref.invalidate(itemAliasesProvider);
   ref.invalidate(stockValueProvider);
+  ref.invalidate(recentActivityProvider);
 }

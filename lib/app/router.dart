@@ -12,6 +12,7 @@ import '../features/inventory/inventory_screen.dart';
 import '../features/inventory/item_detail_screen.dart';
 import '../features/inventory/opening_stock_screen.dart';
 import '../features/inventory/wastage_screen.dart';
+import '../features/reports/health_screen.dart';
 import '../features/reports/reports_screen.dart';
 import '../features/salary/salary_screen.dart';
 import '../features/screenshot/screenshot_import_screen.dart';
@@ -73,6 +74,7 @@ final appRouter = GoRouter(
     GoRoute(path: '/advances', builder: (_, _) => const AdvancesScreen()),
     GoRoute(path: '/import', builder: (_, _) => const ScreenshotImportScreen()),
     GoRoute(path: '/reports', builder: (_, _) => const ReportsScreen()),
+    GoRoute(path: '/health', builder: (_, _) => const HealthScreen()),
     GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
     GoRoute(path: '/members', builder: (_, _) => const MembersScreen()),
     GoRoute(path: '/inventory', builder: (_, _) => const InventoryScreen()),

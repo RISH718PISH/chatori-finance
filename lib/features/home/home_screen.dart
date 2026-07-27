@@ -125,8 +125,9 @@ class FinanceHomeScreen extends ConsumerWidget {
             borderRadius: BorderRadius.circular(8),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          child: Image.asset('assets/logo.png', height: 34),
+          child: Image.asset('assets/logo.png', height: 46),
         ),
+        toolbarHeight: 68,
         actions: [
           IconButton(
             icon: const Icon(Icons.settings_outlined),
@@ -263,6 +264,7 @@ class FinanceHomeScreen extends ConsumerWidget {
               _NavTile('Scan bill', Icons.document_scanner_outlined, '/import'),
               _NavTile('Stock', Icons.inventory_2_outlined, '/inventory'),
               _NavTile('Reports', Icons.bar_chart_outlined, '/reports'),
+              _NavTile('Health', Icons.monitor_heart_outlined, '/health'),
             ],
           ),
           const SizedBox(height: 20),

@@ -7,6 +7,7 @@ import '../../core/money.dart';
 import '../../core/quantity.dart';
 import '../../data/models/inventory.dart';
 import '../reports/reports_providers.dart';
+import '../transaction/transaction_providers.dart';
 import 'inventory_providers.dart';
 
 /// Owner-only monthly view. The headline is "Purchases vs consumption" —
@@ -91,6 +92,8 @@ class InventoryReportScreen extends ConsumerWidget {
                           return bv.compareTo(av);
                         })))
                         _ConsumedRow(row: r, ratePaisePerMilli: wac[r.itemId]),
+                    const SizedBox(height: 20),
+                    const _RecentActivity(),
                     const SizedBox(height: 20),
                     Text(
                       'Your P&L is unchanged — it still counts purchases as '
@@ -206,6 +209,74 @@ class _ConsumedRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The "when did stock change, and who" feed — newest first, across items.
+class _RecentActivity extends ConsumerWidget {
+  const _RecentActivity();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final activity = ref.watch(recentActivityProvider);
+    final members = ref.watch(businessMembersProvider).asData?.value ?? const {};
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const LabelUpper('Recent activity'),
+        const SizedBox(height: 8),
+        activity.when(
+          loading: () => const Padding(
+            padding: EdgeInsets.all(8),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+          error: (e, _) => Text('Error: $e'),
+          data: (list) {
+            if (list.isEmpty) {
+              return Text('No stock changes yet.',
+                  style: Theme.of(context).textTheme.bodySmall);
+            }
+            return Column(
+              children: [
+                for (final a in list.take(20))
+                  _ActivityRow(activity: a, members: members),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _ActivityRow extends StatelessWidget {
+  const _ActivityRow({required this.activity, required this.members});
+  final StockActivity activity;
+  final Map<String, String> members;
+
+  @override
+  Widget build(BuildContext context) {
+    final into = activity.qtyMilli > 0;
+    final color = into ? AppSemantics.income : AppSemantics.expense;
+    final who = attributionFor(members, activity.createdBy);
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      leading: Icon(into ? Icons.south_west : Icons.north_east,
+          color: color, size: 20),
+      title: Text('${activity.itemName} · ${activity.type.label}'),
+      subtitle: Text([
+        DateFormat('d MMM, h:mm a').format(activity.createdAt),
+        if ((activity.reason ?? '').isNotEmpty) activity.reason,
+        ?who,
+      ].join(' · '), maxLines: 1, overflow: TextOverflow.ellipsis),
+      trailing: DataNumber(
+        '${into ? '+' : '−'}${Quantity.format(activity.qtyMilli.abs(), activity.dimension)}',
+        size: DataSize.sm,
+        color: color,
       ),
     );
   }

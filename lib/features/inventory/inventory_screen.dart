@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/design.dart';
 import '../../core/money.dart';
@@ -294,6 +295,8 @@ class _ItemTile extends StatelessWidget {
             'out of stock'
           else if (stock.isLow)
             'low — reorder at ${Quantity.format(stock.reorderLevelMilli, stock.dimension)}',
+          if (stock.lastMovedAt != null)
+            'updated ${DateFormat('d MMM').format(stock.lastMovedAt!)}',
         ].join(' · ')),
         trailing: DataNumber(stock.onHandLabel,
             size: DataSize.sm, color: color),

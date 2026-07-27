@@ -83,7 +83,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                     padding: const EdgeInsets.all(12),
                     child: Image.asset(
                       'assets/logo.png',
-                      height: 140,
+                      height: 180,
                       fit: BoxFit.contain,
                     ),
                   ),

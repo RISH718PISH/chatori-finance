@@ -50,6 +50,10 @@ class StockOnHand {
   final DateTime? lastInOn;
   final DateTime? lastOutOn;
 
+  /// When any movement last touched this item (all types). Drives the
+  /// "updated 27 Jul" line on the stock list.
+  final DateTime? lastMovedAt;
+
   const StockOnHand({
     required this.itemId,
     required this.name,
@@ -62,6 +66,7 @@ class StockOnHand {
     this.outMilli = 0,
     this.lastInOn,
     this.lastOutOn,
+    this.lastMovedAt,
   });
 
   /// At or below the reorder level, and a level was actually set.
@@ -88,6 +93,7 @@ class StockOnHand {
         outMilli: (j['out_milli'] as num?)?.toInt() ?? 0,
         lastInOn: _date(j['last_in_on']),
         lastOutOn: _date(j['last_out_on']),
+        lastMovedAt: _date(j['last_moved_at']),
       );
 }
 
@@ -224,6 +230,63 @@ class ConsumptionRow {
         consumedMilli: (j['consumed_milli'] as num?)?.toInt() ?? 0,
         wastedMilli: (j['wasted_milli'] as num?)?.toInt() ?? 0,
       );
+}
+
+/// One reason bucket of consumption or wastage for a month, valued at WAC.
+class ReasonValue {
+  final String reason;
+  final int qtyMilli;
+  final int valuePaise;
+
+  const ReasonValue({
+    required this.reason,
+    required this.qtyMilli,
+    required this.valuePaise,
+  });
+
+  factory ReasonValue.fromJson(Map<String, dynamic> j) => ReasonValue(
+        reason: (j['reason'] as String?) ?? 'Unspecified',
+        qtyMilli: (j['qty_milli'] as num?)?.toInt() ?? 0,
+        valuePaise: (j['value_paise'] as num?)?.toInt() ?? 0,
+      );
+}
+
+/// A recent movement across the business, for the activity feed — carries
+/// the item name (joined) and the raw timestamp so "when" is exact.
+class StockActivity {
+  final String itemName;
+  final QtyDimension dimension;
+  final StockMovementType type;
+  final int qtyMilli;
+  final DateTime createdAt;
+  final String? createdBy;
+  final String? reason;
+  final String? note;
+
+  const StockActivity({
+    required this.itemName,
+    required this.dimension,
+    required this.type,
+    required this.qtyMilli,
+    required this.createdAt,
+    this.createdBy,
+    this.reason,
+    this.note,
+  });
+
+  factory StockActivity.fromJson(Map<String, dynamic> j) {
+    final item = j['inventory_items'] as Map<String, dynamic>?;
+    return StockActivity(
+      itemName: (item?['name'] as String?) ?? 'Item',
+      dimension: _dim(item?['dimension'] as String?),
+      type: StockMovementType.fromDb(j['movement_type'] as String?),
+      qtyMilli: (j['qty_milli'] as num).toInt(),
+      createdAt: DateTime.parse(j['created_at'] as String).toLocal(),
+      createdBy: j['created_by'] as String?,
+      reason: j['reason'] as String?,
+      note: j['note'] as String?,
+    );
+  }
 }
 
 /// Why stock was consumed — the channel it went out through. Mandatory on

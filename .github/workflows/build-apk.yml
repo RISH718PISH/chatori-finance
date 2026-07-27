@@ -52,12 +52,28 @@ jobs:
 
       - run: flutter build apk --release
 
+      # Pull the version straight from pubspec so the release title and notes
+      # always match the build. "version: 1.27.0+32" -> name 1.27.0, code 32.
+      - name: Read app version
+        id: ver
+        run: |
+          LINE=$(grep '^version:' pubspec.yaml | awk '{print $2}')
+          NAME="${LINE%%+*}"
+          CODE="${LINE##*+}"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "Building release $NAME ($CODE)"
+
       - name: Publish APK to release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "1.20"
+          name: "Chatori Finance ${{ steps.ver.outputs.name }}"
+          # Overwrite the notes each build so the page never shows a stale
+          # version. Keep it generic — the commit history is the changelog.
           body: |
-            Chatori Finance **1.20** — Hyperpure bills auto-split across multiple expense categories (Oil, Dairy, Spices, Grains, Packaging…) with a review-then-save-all flow. Split option always visible; parser tolerates missing header rows in real photo OCR.
-            Download **app-release.apk** below and install it on your phone.
+            **Chatori Finance ${{ steps.ver.outputs.name }}** (build ${{ steps.ver.outputs.code }})
+
+            Latest build from `main`, generated ${{ github.sha }}.
+            Download **app-release.apk** below and install it over your current version.
           files: build/app/outputs/flutter-apk/app-release.apk

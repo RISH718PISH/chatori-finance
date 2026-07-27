@@ -137,6 +137,10 @@ class StockMovement {
   /// Total cost in paise for this movement's quantity. Null when unpriced.
   final int? costPaise;
 
+  /// Structured reason — the consumption channel (Zomato, Catering …) or
+  /// the wastage cause (Spoiled …). Free-text detail is in [note].
+  final String? reason;
+
   const StockMovement({
     required this.id,
     required this.itemId,
@@ -147,6 +151,7 @@ class StockMovement {
     this.eventId,
     this.invoiceItemId,
     this.costPaise,
+    this.reason,
   });
 
   factory StockMovement.fromJson(Map<String, dynamic> j) => StockMovement(
@@ -159,6 +164,7 @@ class StockMovement {
         eventId: j['event_id'] as String?,
         invoiceItemId: j['invoice_item_id'] as String?,
         costPaise: (j['cost_paise'] as num?)?.toInt(),
+        reason: j['reason'] as String?,
       );
 }
 
@@ -219,6 +225,29 @@ class ConsumptionRow {
         wastedMilli: (j['wasted_milli'] as num?)?.toInt() ?? 0,
       );
 }
+
+/// Why stock was consumed — the channel it went out through. Mandatory on
+/// the consumption screen.
+const List<String> kConsumptionReasons = [
+  'Zomato Order',
+  'Swiggy Order',
+  'Direct Order',
+  'Catering',
+  'Consumed By Owner',
+  'Trial / Recipe Testing',
+  'Other',
+];
+
+/// Why stock was wasted.
+const List<String> kWastageReasons = [
+  'Spoiled / Expired',
+  'Spillage',
+  'Over-preparation',
+  'Burnt / Cooking error',
+  'Pest / Contamination',
+  'Returned by customer',
+  'Other',
+];
 
 QtyDimension _dim(String? raw) => switch (raw) {
       'mass' => QtyDimension.mass,

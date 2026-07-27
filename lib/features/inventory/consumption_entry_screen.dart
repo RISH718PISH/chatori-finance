@@ -32,6 +32,7 @@ class _ConsumptionEntryScreenState
   final _filled = ValueNotifier<int>(0);
   DateTime _date = DateTime.now();
   String? _eventId;
+  String? _reason; // mandatory before saving
   bool _saving = false;
 
   TextEditingController _ctl(String itemId) =>
@@ -91,6 +92,7 @@ class _ConsumptionEntryScreenState
         'qty_milli': -milli, // out of stock → negative
         'occurred_on': _date.toIso8601String().substring(0, 10),
         'event_id': _eventId,
+        'reason': _reason,
       });
     }
 
@@ -128,7 +130,7 @@ class _ConsumptionEntryScreenState
     final selectableEvents = events.where((e) => !e.isSettled).toList();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Record usage')),
+      appBar: AppBar(title: const Text('Consumption')),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
@@ -167,7 +169,7 @@ class _ConsumptionEntryScreenState
           child: ValueListenableBuilder<int>(
             valueListenable: _filled,
             builder: (_, n, _) => FilledButton.icon(
-              onPressed: (n == 0 || _saving)
+              onPressed: (n == 0 || _reason == null || _saving)
                   ? null
                   : () => _save(async.asData?.value ?? const []),
               icon: _saving
@@ -181,7 +183,9 @@ class _ConsumptionEntryScreenState
                   ? 'Saving…'
                   : n == 0
                       ? 'Enter what was used'
-                      : 'Save $n ${n == 1 ? 'entry' : 'entries'}'),
+                      : _reason == null
+                          ? 'Pick a reason first'
+                          : 'Save $n ${n == 1 ? 'entry' : 'entries'}'),
             ),
           ),
         ),
@@ -192,42 +196,65 @@ class _ConsumptionEntryScreenState
   Widget _header(BuildContext context, List events) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-      child: Row(
+      child: Column(
         children: [
-          ActionChip(
-            avatar: const Icon(Icons.event, size: 18),
-            label: Text(DateFormat('EEE, d MMM').format(_date)),
-            onPressed: () async {
-              final picked = await showDatePicker(
-                context: context,
-                firstDate: DateTime(2020),
-                lastDate: DateTime.now().add(const Duration(days: 1)),
-                initialDate: _date,
-              );
-              if (picked != null) setState(() => _date = picked);
-            },
-          ),
-          const SizedBox(width: 8),
-          if (events.isNotEmpty)
-            Expanded(
-              child: DropdownButtonFormField<String?>(
-                initialValue: _eventId,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Event (optional)',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                  prefixIcon: Icon(Icons.celebration_outlined),
-                ),
-                items: [
-                  const DropdownMenuItem<String?>(
-                      value: null, child: Text('No event')),
-                  for (final e in events)
-                    DropdownMenuItem(value: e.id as String, child: Text(e.name)),
-                ],
-                onChanged: (v) => setState(() => _eventId = v),
-              ),
+          // Reason is mandatory — it drives the channel reporting the owner
+          // cares about (Zomato vs Swiggy vs Catering …).
+          DropdownButtonFormField<String>(
+            initialValue: _reason,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'Reason for consumption *',
+              border: OutlineInputBorder(),
+              isDense: true,
+              prefixIcon: Icon(Icons.label_outline),
             ),
+            items: [
+              for (final r in kConsumptionReasons)
+                DropdownMenuItem(value: r, child: Text(r)),
+            ],
+            onChanged: (v) => setState(() => _reason = v),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              ActionChip(
+                avatar: const Icon(Icons.event, size: 18),
+                label: Text(DateFormat('EEE, d MMM').format(_date)),
+                onPressed: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime.now().add(const Duration(days: 1)),
+                    initialDate: _date,
+                  );
+                  if (picked != null) setState(() => _date = picked);
+                },
+              ),
+              const SizedBox(width: 8),
+              if (events.isNotEmpty)
+                Expanded(
+                  child: DropdownButtonFormField<String?>(
+                    initialValue: _eventId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Event (optional)',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                      prefixIcon: Icon(Icons.celebration_outlined),
+                    ),
+                    items: [
+                      const DropdownMenuItem<String?>(
+                          value: null, child: Text('No event')),
+                      for (final e in events)
+                        DropdownMenuItem(
+                            value: e.id as String, child: Text(e.name)),
+                    ],
+                    onChanged: (v) => setState(() => _eventId = v),
+                  ),
+                ),
+            ],
+          ),
         ],
       ),
     );

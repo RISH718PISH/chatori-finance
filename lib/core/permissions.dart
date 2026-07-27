@@ -100,6 +100,10 @@ const Map<Role, Set<Permission>> kRolePermissions = {
     Permission.viewInventory,
     Permission.recordConsumption,
     Permission.viewInventoryValue,
+    // The chef can scan purchase bills. That books an expense the chef
+    // still cannot see (finance stays hidden) — the save RPC is
+    // SECURITY DEFINER so it writes the finance rows on their behalf.
+    Permission.scanInvoice,
   },
   // Fails closed.
   Role.unknown: {},

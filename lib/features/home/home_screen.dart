@@ -38,7 +38,7 @@ class HomeScreen extends ConsumerWidget {
         body: Center(child: CircularProgressIndicator()),
       ),
       error: (e, _) => Scaffold(
-        appBar: AppBar(title: const Text('Chatori Finance')),
+        appBar: AppBar(title: const Text('Chatori Kitchen')),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
@@ -66,7 +66,7 @@ class _NoAccessScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final email = ref.watch(authRepoProvider).currentUser?.email ?? '';
     return Scaffold(
-      appBar: AppBar(title: const Text('Chatori Finance')),
+      appBar: AppBar(title: const Text('Chatori Kitchen')),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -119,7 +119,14 @@ class FinanceHomeScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Chatori Finance'),
+        title: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          child: Image.asset('assets/logo.png', height: 34),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings_outlined),

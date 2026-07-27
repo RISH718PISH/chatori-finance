@@ -44,13 +44,14 @@ void main() {
     });
 
     test('chef still cannot reach finance, reports, members or settings', () {
-      // Inventory cost is now allowed; the finance side stays walled off.
+      // Inventory cost and bill-scanning are now allowed; the finance side
+      // (viewing money, reports, operations, members, settings) stays walled
+      // off. scanInvoice writes an expense the chef cannot read.
       const forbidden = [
         Permission.viewFinance,
         Permission.addTransaction,
         Permission.viewReports,
         Permission.viewOperations,
-        Permission.scanInvoice,
         Permission.manageMembers,
         Permission.manageSettings,
       ];

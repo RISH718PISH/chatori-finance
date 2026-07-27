@@ -73,16 +73,21 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(Icons.restaurant_menu, size: 64, color: scheme.primary),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Chatori Finance',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                  // Logo sits on a white card because the PNG has a white
+                  // background (no transparency).
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    padding: const EdgeInsets.all(12),
+                    child: Image.asset(
+                      'assets/logo.png',
+                      height: 140,
+                      fit: BoxFit.contain,
+                    ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 16),
                   Text(
                     _isSignUp ? 'Create your account' : 'Sign in to your books',
                     textAlign: TextAlign.center,

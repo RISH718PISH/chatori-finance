@@ -14,19 +14,39 @@ import 'widgets/item_picker_sheet.dart';
 
 /// Inventory home — the chef's landing screen and an owner section.
 ///
-/// The item tiles show quantities only and are byte-identical for both
-/// roles; the sole owner-only element is the stock-value card, which a chef
-/// never receives data for. No `if (isOwner)` around a money widget that a
-/// chef could otherwise see half-rendered — the value simply isn't there.
-class InventoryScreen extends ConsumerWidget {
+/// Item tiles show quantities only, so the row is identical for both roles;
+/// the only role-dependent element is the stock-value card, which a chef
+/// receives data for only because the owner opted them in.
+class InventoryScreen extends ConsumerStatefulWidget {
   const InventoryScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<InventoryScreen> createState() => _InventoryScreenState();
+}
+
+class _InventoryScreenState extends ConsumerState<InventoryScreen> {
+  final _search = TextEditingController();
+  String? _category; // null = all
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  bool _matches(StockOnHand s) {
+    if (_category != null && s.category != _category) return false;
+    final q = _search.text.trim().toLowerCase();
+    return q.isEmpty || s.name.toLowerCase().contains(q);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final async = ref.watch(stockOnHandProvider);
     final low = ref.watch(lowStockProvider);
     final canViewValue =
         ref.watch(myRoleProvider).can(Permission.viewInventoryValue);
+    final canScan = ref.watch(myRoleProvider).can(Permission.scanInvoice);
     final isOwner = ref.watch(isOwnerProvider);
     final valueTotal = ref.watch(stockValueTotalProvider);
 
@@ -44,26 +64,40 @@ class InventoryScreen extends ConsumerWidget {
             onSelected: (v) => switch (v) {
               'opening' => context.push('/inventory/opening'),
               'add' => showItemPicker(context, ref),
+              'wastage' => context.push('/inventory/wastage'),
+              'scan' => context.push('/import'),
               _ => null,
             },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'add', child: Text('Add an item')),
-              PopupMenuItem(
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: 'add', child: Text('Add an item')),
+              const PopupMenuItem(
                   value: 'opening', child: Text('Count opening stock')),
+              const PopupMenuItem(
+                  value: 'wastage', child: Text('Record wastage')),
+              if (canScan)
+                const PopupMenuItem(value: 'scan', child: Text('Scan a bill')),
             ],
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push('/inventory/consumption'),
-        icon: const Icon(Icons.remove_shopping_cart_outlined),
-        label: const Text('Record usage'),
+        icon: const Icon(Icons.restaurant_menu),
+        label: const Text('Consumption'),
       ),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
         data: (items) {
           if (items.isEmpty) return _empty(context, ref);
+
+          final categories = <String>{
+            for (final s in items)
+              if ((s.category ?? '').isNotEmpty) s.category!,
+          }.toList()
+            ..sort();
+          final filtered = items.where(_matches).toList();
+
           return RefreshIndicator(
             onRefresh: () async {
               refreshInventory(ref);
@@ -107,13 +141,62 @@ class InventoryScreen extends ConsumerWidget {
                   for (final s in low) _ItemTile(stock: s),
                 ],
                 const SizedBox(height: 20),
-                const LabelUpper('All items'),
-                const SizedBox(height: 4),
-                for (final s in items) _ItemTile(stock: s),
+                // Search + category filter.
+                TextField(
+                  controller: _search,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    hintText: 'Search items',
+                    prefixIcon: const Icon(Icons.search),
+                    border: const OutlineInputBorder(),
+                    isDense: true,
+                    suffixIcon: _search.text.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => setState(() => _search.clear()),
+                          ),
+                  ),
+                ),
+                if (categories.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 40,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: [
+                        _catChip('All', _category == null,
+                            () => setState(() => _category = null)),
+                        for (final c in categories)
+                          _catChip(c, _category == c,
+                              () => setState(() => _category = c)),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                if (filtered.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(child: Text('No matching items.')),
+                  )
+                else
+                  for (final s in filtered) _ItemTile(stock: s),
               ],
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _catChip(String label, bool selected, VoidCallback onTap) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: FilterChip(
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) => onTap(),
       ),
     );
   }

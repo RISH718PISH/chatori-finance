@@ -325,6 +325,7 @@ class _MovementRow extends StatelessWidget {
       title: Text(movement.type.label),
       subtitle: Text([
         DateFormat('d MMM').format(movement.occurredOn),
+        if ((movement.reason ?? '').isNotEmpty) movement.reason,
         if ((movement.note ?? '').isNotEmpty) movement.note,
       ].join(' · ')),
       trailing: DataNumber(

@@ -9,6 +9,7 @@ import '../../data/models/inventory.dart';
 import '../events/events_providers.dart';
 import '../transaction/transaction_providers.dart';
 import 'inventory_providers.dart';
+import 'widgets/category_bar.dart';
 
 /// The daily driver: a chef records what the kitchen used today.
 ///
@@ -33,6 +34,8 @@ class _ConsumptionEntryScreenState
   DateTime _date = DateTime.now();
   String? _eventId;
   String? _reason; // mandatory before saving
+  String? _category; // null = all
+  final _search = TextEditingController();
   bool _saving = false;
 
   TextEditingController _ctl(String itemId) =>
@@ -53,13 +56,20 @@ class _ConsumptionEntryScreenState
       c.dispose();
     }
     _filled.dispose();
+    _search.dispose();
     super.dispose();
+  }
+
+  bool _matches(StockOnHand s) {
+    if (_category != null && s.category != _category) return false;
+    final q = _search.text.trim().toLowerCase();
+    return q.isEmpty || s.name.toLowerCase().contains(q);
   }
 
   /// Most-recently-used first, so the daily items float to the top; the
   /// long tail is reached by scrolling or searching.
   List<StockOnHand> _ordered(List<StockOnHand> items) {
-    final sorted = [...items];
+    final sorted = [for (final s in items) if (_matches(s)) s];
     sorted.sort((a, b) {
       final ad = a.lastOutOn, bd = b.lastOutOn;
       if (ad != null && bd != null) return bd.compareTo(ad);
@@ -144,20 +154,37 @@ class _ConsumptionEntryScreenState
                   textAlign: TextAlign.center),
             ));
           }
+          final categories = <String>{
+            for (final s in all)
+              if ((s.category ?? '').isNotEmpty) s.category!,
+          }.toList()
+            ..sort();
           final items = _ordered(all);
           return Column(
             children: [
               _header(context, selectableEvents),
+              CategoryBar(
+                categories: categories,
+                selected: _category,
+                search: _search,
+                onCategory: (c) => setState(() => _category = c),
+                onSearch: () => setState(() {}),
+              ),
               const Divider(height: 1),
               Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
-                  itemCount: items.length,
-                  itemBuilder: (_, i) => _Row(
-                    stock: items[i],
-                    controller: _ctl(items[i].itemId),
-                  ),
-                ),
+                child: items.isEmpty
+                    ? const Center(
+                        child: Padding(
+                            padding: EdgeInsets.all(24),
+                            child: Text('No matching items.')))
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
+                        itemCount: items.length,
+                        itemBuilder: (_, i) => _Row(
+                          stock: items[i],
+                          controller: _ctl(items[i].itemId),
+                        ),
+                      ),
               ),
             ],
           );

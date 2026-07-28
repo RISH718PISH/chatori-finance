@@ -69,10 +69,19 @@ class StockOnHand {
     this.lastMovedAt,
   });
 
+  /// Never had any stock recorded — a freshly created item awaiting an
+  /// opening count. Distinct from "ran out": we don't want to flag 90
+  /// uncounted items as low.
+  bool get neverStocked =>
+      inMilli == 0 && outMilli == 0 && onHandMilli == 0;
+
   /// At or below the reorder level, and a level was actually set.
   bool get isLow =>
       reorderLevelMilli > 0 && onHandMilli <= reorderLevelMilli;
-  bool get isOut => onHandMilli <= 0;
+
+  /// Ran out — was stocked at some point and is now at/below zero. Excludes
+  /// never-counted items.
+  bool get isOut => onHandMilli <= 0 && !neverStocked;
 
   QtyUnit get unit =>
       Quantity.unitFromSymbol(displayUnit) ??

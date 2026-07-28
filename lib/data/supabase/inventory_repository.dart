@@ -51,6 +51,7 @@ class InventoryRepository {
     required String id,
     String? name,
     String? displayUnit,
+    QtyDimension? dimension,
     String? category,
     int? reorderLevelMilli,
     bool? archived,
@@ -58,6 +59,7 @@ class InventoryRepository {
     await _client.from('inventory_items').update({
       if (name != null) 'name': name.trim(),
       'display_unit': ?displayUnit,
+      'dimension': ?dimension?.name,
       'category': ?category,
       'reorder_level_milli': ?reorderLevelMilli,
       'archived': ?archived,

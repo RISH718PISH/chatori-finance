@@ -53,7 +53,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Stock'),
+        title: Image.asset('assets/logo_wordmark.png', height: 36),
+        toolbarHeight: 62,
         actions: [
           if (isOwner)
             IconButton(

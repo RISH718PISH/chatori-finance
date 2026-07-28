@@ -60,19 +60,23 @@ jobs:
           LINE=$(grep '^version:' pubspec.yaml | awk '{print $2}')
           NAME="${LINE%%+*}"
           CODE="${LINE##*+}"
+          # Dessert codename for the release, à la Android. Bump
+          # app_codename.txt each release.
+          CODENAME=$(cat app_codename.txt 2>/dev/null | tr -d '\r\n' || echo "")
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "code=$CODE" >> "$GITHUB_OUTPUT"
-          echo "Building release $NAME ($CODE)"
+          echo "codename=$CODENAME" >> "$GITHUB_OUTPUT"
+          echo "Building release $NAME ($CODE) — $CODENAME"
 
       - name: Publish APK to release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "Chatori Finance ${{ steps.ver.outputs.name }}"
+          name: "Chatori Kitchen ${{ steps.ver.outputs.name }} — ${{ steps.ver.outputs.codename }}"
           # Overwrite the notes each build so the page never shows a stale
           # version. Keep it generic — the commit history is the changelog.
           body: |
-            **Chatori Finance ${{ steps.ver.outputs.name }}** (build ${{ steps.ver.outputs.code }})
+            **Chatori Kitchen ${{ steps.ver.outputs.name }} “${{ steps.ver.outputs.codename }}”** (build ${{ steps.ver.outputs.code }})
 
             Latest build from `main`, generated ${{ github.sha }}.
             Download **app-release.apk** below and install it over your current version.

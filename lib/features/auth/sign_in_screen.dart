@@ -73,13 +73,13 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Transparent logo sits directly on the theme background.
+                  // Trimmed transparent wordmark, sits on the theme.
                   Image.asset(
-                    'assets/Logo_Transparent.png',
-                    height: 190,
+                    'assets/logo_wordmark.png',
+                    height: 96,
                     fit: BoxFit.contain,
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 20),
                   Text(
                     _isSignUp ? 'Create your account' : 'Sign in to your books',
                     textAlign: TextAlign.center,

@@ -7,6 +7,7 @@ import '../../core/quantity.dart';
 import '../../data/models/inventory.dart';
 import '../transaction/transaction_providers.dart';
 import 'inventory_providers.dart';
+import 'widgets/category_bar.dart';
 import 'widgets/item_picker_sheet.dart';
 
 /// One-time opening count: the chef walks the store and types current
@@ -25,7 +26,15 @@ class _OpeningStockScreenState extends ConsumerState<OpeningStockScreen> {
   final _controllers = <String, TextEditingController>{};
   final _priceControllers = <String, TextEditingController>{};
   final _filled = ValueNotifier<int>(0);
+  final _search = TextEditingController();
+  String? _category; // null = all
   bool _saving = false;
+
+  bool _matches(InventoryItem it) {
+    if (_category != null && it.category != _category) return false;
+    final q = _search.text.trim().toLowerCase();
+    return q.isEmpty || it.name.toLowerCase().contains(q);
+  }
 
   TextEditingController _ctl(String id) =>
       _controllers.putIfAbsent(id, () {
@@ -49,6 +58,7 @@ class _OpeningStockScreenState extends ConsumerState<OpeningStockScreen> {
     for (final c in _priceControllers.values) {
       c.dispose();
     }
+    _search.dispose();
     _filled.dispose();
     super.dispose();
   }
@@ -161,14 +171,40 @@ class _OpeningStockScreenState extends ConsumerState<OpeningStockScreen> {
                     ),
                   );
                 }
-                return ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
-                  itemCount: items.length,
-                  itemBuilder: (_, i) => _Row(
-                    item: items[i],
-                    controller: _ctl(items[i].id),
-                    priceController: _priceCtl(items[i].id),
-                  ),
+                final categories = <String>{
+                  for (final it in items)
+                    if ((it.category ?? '').isNotEmpty) it.category!,
+                }.toList()
+                  ..sort();
+                final shown = [for (final it in items) if (_matches(it)) it];
+                return Column(
+                  children: [
+                    CategoryBar(
+                      categories: categories,
+                      selected: _category,
+                      search: _search,
+                      onCategory: (c) => setState(() => _category = c),
+                      onSearch: () => setState(() {}),
+                    ),
+                    const Divider(height: 1),
+                    Expanded(
+                      child: shown.isEmpty
+                          ? const Center(
+                              child: Padding(
+                                  padding: EdgeInsets.all(24),
+                                  child: Text('No matching items.')))
+                          : ListView.builder(
+                              padding:
+                                  const EdgeInsets.fromLTRB(12, 8, 12, 96),
+                              itemCount: shown.length,
+                              itemBuilder: (_, i) => _Row(
+                                item: shown[i],
+                                controller: _ctl(shown[i].id),
+                                priceController: _priceCtl(shown[i].id),
+                              ),
+                            ),
+                    ),
+                  ],
                 );
               },
             ),

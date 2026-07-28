@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/categories.dart';
 import '../../core/design.dart';
 import '../../core/money.dart';
 import '../../core/permissions.dart';
@@ -38,16 +40,20 @@ class ItemDetailScreen extends ConsumerWidget {
         actions: [
           PopupMenuButton<String>(
             onSelected: (v) => switch (v) {
+              'edit' => _editItem(context, ref, stock),
               'addstock' => _addStock(context, ref, stock),
               'adjust' => _adjust(context, ref, stock),
               'wastage' => _wastage(context, ref, stock),
+              'archive' => _archive(context, ref, stock),
               _ => null,
             },
             itemBuilder: (_) => const [
+              PopupMenuItem(value: 'edit', child: Text('Edit item')),
               PopupMenuItem(value: 'addstock', child: Text('Add stock')),
               PopupMenuItem(
                   value: 'adjust', child: Text('Correct to a counted amount')),
               PopupMenuItem(value: 'wastage', child: Text('Record wastage')),
+              PopupMenuItem(value: 'archive', child: Text('Archive item')),
             ],
           ),
         ],
@@ -155,6 +161,149 @@ class ItemDetailScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  /// Fix an item's name, category, unit and reorder level — the recovery
+  /// path for the miscategorised rows that turn up after a fast setup.
+  Future<void> _editItem(
+      BuildContext context, WidgetRef ref, StockOnHand stock) async {
+    final hasMovements =
+        (ref.read(itemMovementsProvider(stock.itemId)).asData?.value ?? const [])
+            .isNotEmpty;
+    final nameCtl = TextEditingController(text: stock.name);
+    final reorderCtl = TextEditingController(
+        text: stock.reorderLevelMilli > 0
+            ? Quantity.fromMilli(stock.reorderLevelMilli, stock.unit)
+                .toString()
+            : '');
+    var unit = stock.unit;
+    var category = stock.category;
+    final expenseCats =
+        kSeedCategories.where((c) => c.kind == 'expense').toList();
+
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => Padding(
+          padding: EdgeInsets.fromLTRB(
+              16, 0, 16, MediaQuery.of(ctx).viewInsets.bottom + 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Edit item', style: Theme.of(ctx).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              TextField(
+                controller: nameCtl,
+                decoration: const InputDecoration(
+                    labelText: 'Name', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: category,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                    labelText: 'Category', border: OutlineInputBorder()),
+                items: [
+                  for (final c in expenseCats)
+                    DropdownMenuItem(value: c.name, child: Text(c.name)),
+                ],
+                onChanged: (v) => setSheet(() => category = v),
+              ),
+              const SizedBox(height: 12),
+              const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Unit')),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 6,
+                children: [
+                  for (final u in Quantity.all)
+                    ChoiceChip(
+                      label: Text(u.symbol),
+                      selected: unit.symbol == u.symbol,
+                      // Changing dimension once there are movements would
+                      // reinterpret history, so lock it then.
+                      onSelected: (hasMovements &&
+                              u.dimension != stock.dimension)
+                          ? null
+                          : (_) => setSheet(() => unit = u),
+                    ),
+                ],
+              ),
+              if (hasMovements)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Unit can switch within the same measure (kg↔g). To change '
+                    'the measure itself, archive this and make a new item.',
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: reorderCtl,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: 'Reorder level (optional)',
+                  suffixText: unit.symbol,
+                  border: const OutlineInputBorder(),
+                  helperText: 'Warn me when stock falls to this',
+                ),
+              ),
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Save'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (ok != true || nameCtl.text.trim().isEmpty) return;
+    final reorder = double.tryParse(reorderCtl.text.trim());
+    await ref.read(inventoryRepoProvider).updateItem(
+          id: stock.itemId,
+          name: nameCtl.text.trim(),
+          category: category,
+          displayUnit: unit.symbol,
+          dimension: unit.dimension,
+          reorderLevelMilli:
+              reorder == null ? 0 : Quantity.toMilli(reorder, unit),
+        );
+    refreshInventory(ref);
+  }
+
+  Future<void> _archive(
+      BuildContext context, WidgetRef ref, StockOnHand stock) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Archive ${stock.name}?'),
+        content: const Text(
+            'It disappears from the stock list. History is kept. Use this for '
+            'duplicates or things you no longer buy.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              style: FilledButton.styleFrom(
+                  backgroundColor: AppSemantics.expense),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Archive')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await ref.read(inventoryRepoProvider).updateItem(
+        id: stock.itemId, archived: true);
+    refreshInventory(ref);
+    if (context.mounted) context.pop();
   }
 
   /// Manually add stock not captured on a scanned bill — a cash purchase,

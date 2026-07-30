@@ -1071,7 +1071,8 @@ begin
                  (now() at time zone 'Asia/Kolkata')::date),
         v_pii_id
       )
-      on conflict (invoice_item_id) do nothing;
+      on conflict (invoice_item_id) where invoice_item_id is not null
+        do nothing;
 
       -- Learn the mapping for next time.
       insert into public.item_aliases
@@ -1252,7 +1253,8 @@ begin
                  (now() at time zone 'Asia/Kolkata')::date),
         v_pii_id, it.line_total_paise
       )
-      on conflict (invoice_item_id) do nothing;
+      on conflict (invoice_item_id) where invoice_item_id is not null
+        do nothing;
 
       insert into public.item_aliases
         (business_id, item_id, alias, vendor_name, hsn)

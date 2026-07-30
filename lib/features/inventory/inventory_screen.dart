@@ -111,9 +111,10 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
               physics: const AlwaysScrollableScrollPhysics(),
               children: [
+                // ── Summary cards ──
                 Row(
                   children: [
-                    _statCard(context, 'Items tracked', '${items.length}'),
+                    _statCard(context, 'Items', '${items.length}'),
                     const SizedBox(width: 12),
                     if (canViewValue)
                       _statCard(
@@ -123,9 +124,56 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                             ? '—'
                             : Money.format(valueTotal, decimals: false),
                         color: AppSemantics.income,
-                      ),
+                      )
+                    else
+                      _statCard(context, 'Low / out', '${low.length}',
+                          color: low.isEmpty
+                              ? null
+                              : AppSemantics.warning),
                   ],
                 ),
+
+                // ── Quick actions ──
+                const SizedBox(height: 20),
+                const LabelUpper('Quick actions'),
+                const SizedBox(height: 8),
+                GridView.count(
+                  crossAxisCount: 2,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  childAspectRatio: 2.4,
+                  children: [
+                    _ActionTile(
+                      icon: Icons.restaurant_menu,
+                      label: 'Consumption',
+                      color: AppSemantics.expense,
+                      onTap: () => context.push('/inventory/consumption'),
+                    ),
+                    _ActionTile(
+                      icon: Icons.delete_outline,
+                      label: 'Wastage',
+                      color: AppSemantics.warning,
+                      onTap: () => context.push('/inventory/wastage'),
+                    ),
+                    if (canScan)
+                      _ActionTile(
+                        icon: Icons.document_scanner_outlined,
+                        label: 'Scan a bill',
+                        color: AppSemantics.income,
+                        onTap: () => context.push('/import'),
+                      ),
+                    _ActionTile(
+                      icon: Icons.checklist,
+                      label: 'Count stock',
+                      color: Theme.of(context).colorScheme.primary,
+                      onTap: () => context.push('/inventory/opening'),
+                    ),
+                  ],
+                ),
+
+                // ── Running low (capped) ──
                 if (low.isNotEmpty) ...[
                   const SizedBox(height: 20),
                   Row(
@@ -140,10 +188,21 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                     ],
                   ),
                   const SizedBox(height: 4),
-                  for (final s in low) _ItemTile(stock: s),
+                  for (final s in low.take(6)) _ItemTile(stock: s),
+                  if (low.length > 6)
+                    TextButton(
+                      onPressed: () => setState(() {
+                        _search.clear();
+                        _category = null;
+                      }),
+                      child: Text('+ ${low.length - 6} more low'),
+                    ),
                 ],
+
+                // ── All items: search + category filter ──
                 const SizedBox(height: 20),
-                // Search + category filter.
+                const LabelUpper('All items'),
+                const SizedBox(height: 8),
                 TextField(
                   controller: _search,
                   onChanged: (_) => setState(() {}),
@@ -197,6 +256,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
       padding: const EdgeInsets.only(right: 6),
       child: FilterChip(
         label: Text(label),
+
         selected: selected,
         onSelected: (_) => onTap(),
       ),
@@ -268,6 +328,49 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
       behavior: SnackBarBehavior.floating,
       content: Text('Order list copied — paste into WhatsApp'),
     ));
+  }
+}
+
+class _ActionTile extends StatelessWidget {
+  const _ActionTile({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: color.withValues(alpha: 0.15),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(label,
+                    style: Theme.of(context).textTheme.titleSmall,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

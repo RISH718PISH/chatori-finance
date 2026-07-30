@@ -33,10 +33,14 @@ class _ConsumptionEntryScreenState
   final _filled = ValueNotifier<int>(0);
   DateTime _date = DateTime.now();
   String? _eventId;
-  String? _reason; // mandatory before saving
+  final Set<String> _reasons = {}; // at least one required before saving
   String? _category; // null = all
   final _search = TextEditingController();
   bool _saving = false;
+
+  /// Joined for storage — a batch that served more than one channel is
+  /// tagged with all of them.
+  String get _reasonText => (_reasons.toList()..sort()).join(' + ');
 
   TextEditingController _ctl(String itemId) =>
       _controllers.putIfAbsent(itemId, () {
@@ -80,6 +84,49 @@ class _ConsumptionEntryScreenState
     return sorted;
   }
 
+  Future<void> _pickReasons() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: Text('Where did this go?',
+                    style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
+              for (final r in kConsumptionReasons)
+                CheckboxListTile(
+                  dense: true,
+                  value: _reasons.contains(r),
+                  title: Text(r),
+                  onChanged: (v) => setSheet(() {
+                    setState(() {
+                      if (v == true) {
+                        _reasons.add(r);
+                      } else {
+                        _reasons.remove(r);
+                      }
+                    });
+                  }),
+                ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Done'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _save(List<StockOnHand> items) async {
     if (_saving) return;
     final messenger = ScaffoldMessenger.of(context);
@@ -102,7 +149,7 @@ class _ConsumptionEntryScreenState
         'qty_milli': -milli, // out of stock → negative
         'occurred_on': _date.toIso8601String().substring(0, 10),
         'event_id': _eventId,
-        'reason': _reason,
+        'reason': _reasonText,
       });
     }
 
@@ -196,7 +243,7 @@ class _ConsumptionEntryScreenState
           child: ValueListenableBuilder<int>(
             valueListenable: _filled,
             builder: (_, n, _) => FilledButton.icon(
-              onPressed: (n == 0 || _reason == null || _saving)
+              onPressed: (n == 0 || _reasons.isEmpty || _saving)
                   ? null
                   : () => _save(async.asData?.value ?? const []),
               icon: _saving
@@ -210,7 +257,7 @@ class _ConsumptionEntryScreenState
                   ? 'Saving…'
                   : n == 0
                       ? 'Enter what was used'
-                      : _reason == null
+                      : _reasons.isEmpty
                           ? 'Pick a reason first'
                           : 'Save $n ${n == 1 ? 'entry' : 'entries'}'),
             ),
@@ -225,22 +272,28 @@ class _ConsumptionEntryScreenState
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       child: Column(
         children: [
-          // Reason is mandatory — it drives the channel reporting the owner
-          // cares about (Zomato vs Swiggy vs Catering …).
-          DropdownButtonFormField<String>(
-            initialValue: _reason,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: 'Reason for consumption *',
-              border: OutlineInputBorder(),
-              isDense: true,
-              prefixIcon: Icon(Icons.label_outline),
+          // Reason is mandatory and multi-select — a batch can serve more
+          // than one channel (Zomato + Swiggy + Staff Food …).
+          InkWell(
+            onTap: _pickReasons,
+            borderRadius: BorderRadius.circular(8),
+            child: InputDecorator(
+              decoration: const InputDecoration(
+                labelText: 'Reason for consumption *',
+                border: OutlineInputBorder(),
+                isDense: true,
+                prefixIcon: Icon(Icons.label_outline),
+                suffixIcon: Icon(Icons.arrow_drop_down),
+              ),
+              child: Text(
+                _reasons.isEmpty ? 'Select one or more' : _reasonText,
+                style: _reasons.isEmpty
+                    ? TextStyle(color: Theme.of(context).hintColor)
+                    : null,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-            items: [
-              for (final r in kConsumptionReasons)
-                DropdownMenuItem(value: r, child: Text(r)),
-            ],
-            onChanged: (v) => setState(() => _reason = v),
           ),
           const SizedBox(height: 8),
           Row(

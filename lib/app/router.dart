@@ -11,6 +11,7 @@ import '../features/inventory/inventory_report_screen.dart';
 import '../features/inventory/inventory_screen.dart';
 import '../features/inventory/item_detail_screen.dart';
 import '../features/inventory/opening_stock_screen.dart';
+import '../features/inventory/stock_count_screen.dart';
 import '../features/inventory/wastage_screen.dart';
 import '../features/reports/health_screen.dart';
 import '../features/reports/reports_screen.dart';
@@ -89,6 +90,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/inventory/wastage',
       builder: (_, _) => const WastageScreen(),
+    ),
+    GoRoute(
+      path: '/inventory/count',
+      builder: (_, _) => const StockCountScreen(),
     ),
     GoRoute(
       path: '/inventory/report',

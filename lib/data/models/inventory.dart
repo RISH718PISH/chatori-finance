@@ -305,6 +305,7 @@ const List<String> kConsumptionReasons = [
   'Swiggy Order',
   'Direct Order',
   'Catering',
+  'Staff Food',
   'Consumed By Owner',
   'Trial / Recipe Testing',
   'Other',

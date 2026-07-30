@@ -165,10 +165,10 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                         onTap: () => context.push('/import'),
                       ),
                     _ActionTile(
-                      icon: Icons.checklist,
-                      label: 'Count stock',
+                      icon: Icons.fact_check_outlined,
+                      label: 'Stock count',
                       color: Theme.of(context).colorScheme.primary,
-                      onTap: () => context.push('/inventory/opening'),
+                      onTap: () => context.push('/inventory/count'),
                     ),
                   ],
                 ),

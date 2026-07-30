@@ -5,6 +5,7 @@ import '../features/advances/advances_screen.dart';
 import '../features/customers/customers_screen.dart';
 import '../features/events/event_detail_screen.dart';
 import '../features/events/events_screen.dart';
+import '../features/export/export_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/inventory/consumption_entry_screen.dart';
 import '../features/inventory/inventory_report_screen.dart';
@@ -76,6 +77,7 @@ final appRouter = GoRouter(
     GoRoute(path: '/import', builder: (_, _) => const ScreenshotImportScreen()),
     GoRoute(path: '/reports', builder: (_, _) => const ReportsScreen()),
     GoRoute(path: '/health', builder: (_, _) => const HealthScreen()),
+    GoRoute(path: '/export', builder: (_, _) => const ExportScreen()),
     GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
     GoRoute(path: '/members', builder: (_, _) => const MembersScreen()),
     GoRoute(path: '/inventory', builder: (_, _) => const InventoryScreen()),

@@ -258,6 +258,7 @@ class FinanceHomeScreen extends ConsumerWidget {
               _NavTile('Stock', Icons.inventory_2_outlined, '/inventory'),
               _NavTile('Reports', Icons.bar_chart_outlined, '/reports'),
               _NavTile('Health', Icons.monitor_heart_outlined, '/health'),
+              _NavTile('Export', Icons.download_outlined, '/export'),
             ],
           ),
           const SizedBox(height: 20),

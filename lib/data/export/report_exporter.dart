@@ -274,6 +274,16 @@ class ReportExporter {
     return file.path;
   }
 
+  /// Writes binary bytes (e.g. an .xlsx workbook) to app cache and returns
+  /// the path — for sharing.
+  static Future<String> writeBytesToCache(String name, List<int> bytes) async {
+    final dir = await getTemporaryDirectory();
+    final safe = name.replaceAll(RegExp(r'[^A-Za-z0-9_\-.]'), '_');
+    final file = File(p.join(dir.path, safe));
+    await file.writeAsBytes(bytes);
+    return file.path;
+  }
+
   /// Returns paise of advances still outstanding across all statuses.
   static int outstandingAdvances(List<Advance> advances) {
     var sum = 0;

@@ -1,3 +1,5 @@
+import '../../core/categories.dart';
+
 /// Plain transaction model backed by the Supabase `transactions` table.
 class Txn {
   final String id;
@@ -87,6 +89,8 @@ class Totals {
     var income = 0;
     var expense = 0;
     for (final t in txns) {
+      // Owner capital in/out is not income or expense — keep it out of totals.
+      if (isCapitalCategory(t.category)) continue;
       if (t.isIncome) {
         income += t.amountPaise;
       } else {
@@ -95,4 +99,15 @@ class Totals {
     }
     return Totals(income, expense);
   }
+}
+
+/// Net owner capital across [txns]: funds added minus withdrawals, in paise.
+/// Positive means the owner has put money in. Excluded from all P&L totals.
+int ownerFundsNetPaise(Iterable<Txn> txns) {
+  var net = 0;
+  for (final t in txns) {
+    if (!isCapitalCategory(t.category)) continue;
+    net += t.isIncome ? t.amountPaise : -t.amountPaise;
+  }
+  return net;
 }

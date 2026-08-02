@@ -2,6 +2,7 @@ import 'package:intl/intl.dart';
 import 'package:syncfusion_officechart/officechart.dart';
 import 'package:syncfusion_flutter_xlsio/xlsio.dart';
 
+import '../../core/categories.dart';
 import '../models/txn.dart';
 
 /// Builds a rich, multi-sheet Excel workbook for one month — the "detailed
@@ -39,8 +40,12 @@ class MonthlyWorkbook {
 
     // ---- aggregate ----
     double r(int paise) => paise / 100.0;
-    final income = txns.where((t) => t.isIncome).toList();
-    final expense = txns.where((t) => !t.isIncome).toList();
+    // Owner capital is neither income nor expense — keep it out of the P&L
+    // aggregations and surface it separately as a running total.
+    final op = txns.where((t) => !isCapitalCategory(t.category)).toList();
+    final ownerFunds = ownerFundsNetPaise(txns);
+    final income = op.where((t) => t.isIncome).toList();
+    final expense = op.where((t) => !t.isIncome).toList();
     final totIncome = income.fold<int>(0, (s, t) => s + t.amountPaise);
     final totExpense =
         expense.fold<int>(0, (s, t) => s + t.amountPaise) + salaryPaidPaise;
@@ -67,7 +72,7 @@ class MonthlyWorkbook {
 
     // event / stream grouping
     final evMap = <String, List<int>>{}; // key -> [income, expense, count]
-    for (final t in txns) {
+    for (final t in op) {
       final key = t.eventId == null
           ? 'Cloud Kitchen & Daily Ops'
           : (eventNames[t.eventId] ?? 'Event');
@@ -85,7 +90,7 @@ class MonthlyWorkbook {
 
     // day-by-day
     final dayMap = <String, List<int>>{}; // yyyy-MM-dd -> [income, expense]
-    for (final t in txns) {
+    for (final t in op) {
       final key = _isoFmt.format(t.occurredAt);
       final d = dayMap.putIfAbsent(key, () => [0, 0]);
       if (t.isIncome) {
@@ -99,7 +104,7 @@ class MonthlyWorkbook {
     // ---- workbook ----
     final wb = Workbook();
     _buildSummary(wb.worksheets[0], monthLabel, txns.length, r, totIncome,
-        totExpense, net, margin.toDouble(), expByCat, incByCat);
+        totExpense, net, margin.toDouble(), ownerFunds, expByCat, incByCat);
     _buildEvents(wb.worksheets.addWithName('Event P&L'), r, events);
     _buildDaily(wb.worksheets.addWithName('Day-by-day'), r, days, dayMap);
     _buildLedger(wb.worksheets.addWithName('All transactions'), r, txns,
@@ -141,6 +146,7 @@ class MonthlyWorkbook {
     int totExpense,
     int net,
     double margin,
+    int ownerFunds,
     List<MapEntry<String, int>> expByCat,
     List<MapEntry<String, int>> incByCat,
   ) {
@@ -179,6 +185,15 @@ class MonthlyWorkbook {
       ..fontColor = _brown;
     s.getRangeByIndex(4, 3).setText('$entryCount entries this month');
     s.getRangeByIndex(4, 3).cellStyle.fontColor = '#9A8A73';
+    if (ownerFunds != 0) {
+      s.getRangeByIndex(6, 3).setText("Owner's funds added (not in profit)");
+      s.getRangeByIndex(6, 3).cellStyle.fontColor = '#9A8A73';
+      final of = s.getRangeByIndex(6, 4)..setNumber(ownerFunds / 100.0);
+      of.numberFormat = _money;
+      of.cellStyle
+        ..bold = true
+        ..fontColor = _brown;
+    }
 
     // Expenses by category table (A/B), starting row 10
     final expStart = 10;

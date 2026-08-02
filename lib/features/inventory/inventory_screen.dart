@@ -170,6 +170,12 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                       color: Theme.of(context).colorScheme.primary,
                       onTap: () => context.push('/inventory/count'),
                     ),
+                    _ActionTile(
+                      icon: Icons.soup_kitchen_outlined,
+                      label: 'Record prep',
+                      color: AppSemantics.expense,
+                      onTap: () => context.push('/inventory/prep'),
+                    ),
                   ],
                 ),
 

@@ -201,6 +201,19 @@ class _PlView extends ConsumerWidget {
               pl.netProfit >= 0 ? AppSemantics.income : AppSemantics.expense,
           emphasized: true,
         ),
+        if (pl.totalCapital != 0) ...[
+          const SizedBox(height: 12),
+          _plTotal(context, "Owner's funds added", pl.totalCapital,
+              color: Theme.of(context).colorScheme.onSurfaceVariant),
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              'Your own money put into the business — kept out of profit.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+          ),
+        ],
         if (prev != null) ...[
           const SizedBox(height: 24),
           LabelUpper('vs previous month'),

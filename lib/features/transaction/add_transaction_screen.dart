@@ -9,9 +9,13 @@ import '../../core/categories.dart';
 import '../../core/category_icons.dart';
 import '../../core/design.dart';
 import '../../core/money.dart';
+import '../../core/quantity.dart';
 import '../../data/models/event.dart';
+import '../../data/models/inventory.dart';
 import '../../data/models/txn.dart';
 import '../events/events_providers.dart';
+import '../inventory/inventory_providers.dart';
+import '../inventory/widgets/item_picker_sheet.dart';
 import 'bulk_add_screen.dart';
 import 'transaction_providers.dart';
 
@@ -116,12 +120,24 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   int _upiSplitPaise = 0;
   final _partyController = TextEditingController();
   final _noteController = TextEditingController();
+  final _qtyController = TextEditingController();
   DateTime _date = DateTime.now();
   bool _showMore = false;
   bool _saving = false;
 
+  // Optional "also add to stock" for an expense purchase.
+  bool _addToStock = false;
+  InventoryItem? _stockItem;
+
   bool get _isIncome => _type == 'income';
   bool get _isSplit => _paymentMode == kPaymentModeSplit;
+
+  double get _stockQty => double.tryParse(_qtyController.text.trim()) ?? 0;
+
+  /// Stock section is satisfied either when it's off, or an item + a positive
+  /// quantity are chosen. Keeps a half-filled stock line from being ignored.
+  bool get _stockOk =>
+      !_addToStock || (_stockItem != null && _stockQty > 0);
 
   /// Split is valid when both parts are positive and sum exactly to the total.
   bool get _splitValid =>
@@ -130,12 +146,16 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
       (_cashSplitPaise + _upiSplitPaise) == _amountPaise;
 
   bool get _canSave =>
-      _amountPaise > 0 && _category != null && (!_isSplit || _splitValid);
+      _amountPaise > 0 &&
+      _category != null &&
+      (!_isSplit || _splitValid) &&
+      _stockOk;
 
   @override
   void dispose() {
     _partyController.dispose();
     _noteController.dispose();
+    _qtyController.dispose();
     super.dispose();
   }
 
@@ -295,6 +315,23 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
           cashPaise: _isSplit ? _cashSplitPaise : null,
           upiPaise: _isSplit ? _upiSplitPaise : null,
         );
+        // Optional: mirror the purchase into the stock ledger so a typed
+        // expense (e.g. "Chicken ₹5,075") also raises inventory, the way a
+        // scanned bill already does.
+        if (!_isIncome && _addToStock && _stockItem != null && _stockQty > 0) {
+          final unit = Quantity.unitFromSymbol(_stockItem!.displayUnit) ??
+              Quantity.defaultUnitFor(_stockItem!.dimension);
+          await ref.read(inventoryRepoProvider).addMovement(
+                businessId: biz,
+                itemId: _stockItem!.id,
+                type: StockMovementType.purchase,
+                qtyMilli: Quantity.toMilli(_stockQty, unit),
+                occurredOn: _date,
+                costPaise: _amountPaise,
+                note: 'Manual purchase',
+              );
+          refreshInventory(ref);
+        }
       }
       if (!mounted) return;
       refreshTransactions(ref);
@@ -439,6 +476,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                   selectedId: _eventId,
                   onChanged: (id) => setState(() => _eventId = id),
                 ),
+                if (!_isIncome && !_isEdit) _stockSection(context),
                 if (_isEdit && widget.editing?.attachmentPath != null) ...[
                   const SizedBox(height: 12),
                   _AttachmentThumb(path: widget.editing!.attachmentPath!),
@@ -505,6 +543,62 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
             : _noteController.text.trim(),
       ),
     );
+  }
+
+  /// Optional "also add to stock" panel for an expense purchase. Off by
+  /// default so quick typing isn't slowed, and so a lumped expense (e.g.
+  /// "Groceries ₹2,404") isn't forced onto a single item.
+  Widget _stockSection(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 4),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          value: _addToStock,
+          onChanged: (v) => setState(() => _addToStock = v),
+          title: const Text('Also add to stock'),
+          subtitle: const Text('Record this purchase in inventory'),
+        ),
+        if (_addToStock) ...[
+          InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: _pickStockItem,
+            child: InputDecorator(
+              decoration: const InputDecoration(
+                labelText: 'Item',
+                border: OutlineInputBorder(),
+                isDense: true,
+                prefixIcon: Icon(Icons.inventory_2_outlined),
+              ),
+              child: Text(_stockItem?.name ?? 'Choose or create item'),
+            ),
+          ),
+          if (_stockItem != null) ...[
+            const SizedBox(height: 8),
+            TextField(
+              controller: _qtyController,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                labelText: 'Quantity bought',
+                suffixText: _stockItem!.displayUnit,
+                border: const OutlineInputBorder(),
+                isDense: true,
+                prefixIcon: const Icon(Icons.scale_outlined),
+              ),
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+
+  Future<void> _pickStockItem() async {
+    final res = await showItemPicker(context, ref);
+    if (res != null) setState(() => _stockItem = res.item);
   }
 
   Widget _moreDetails(BuildContext context) {

@@ -129,6 +129,44 @@ class InventoryRepository {
     await _client.from('stock_movements').insert(rows);
   }
 
+  /// Batch cooking: one action deducts a raw item and adds the cooked item
+  /// (e.g. −10 kg raw chicken, +7 kg boiled chicken — the gap is the cooking
+  /// yield). Written as two rows in a single insert so they land together.
+  /// The raw side is a `consumption` (it was used into the batch); the cooked
+  /// side is a signed `adjustment` in (production isn't a movement type).
+  Future<void> recordPrep({
+    required String businessId,
+    required String rawItemId,
+    required int rawQtyMilli, // positive magnitude
+    required String producedItemId,
+    required int producedQtyMilli, // positive magnitude
+    DateTime? occurredOn,
+    String? note,
+  }) async {
+    final on =
+        (occurredOn ?? DateTime.now()).toIso8601String().substring(0, 10);
+    await addMovements([
+      {
+        'business_id': businessId,
+        'item_id': rawItemId,
+        'movement_type': StockMovementType.consumption.dbValue,
+        'qty_milli': -rawQtyMilli,
+        'occurred_on': on,
+        'reason': 'Batch prep',
+        'note': note,
+      },
+      {
+        'business_id': businessId,
+        'item_id': producedItemId,
+        'movement_type': StockMovementType.adjustment.dbValue,
+        'qty_milli': producedQtyMilli,
+        'occurred_on': on,
+        'reason': 'Batch prep',
+        'note': note,
+      },
+    ]);
+  }
+
   /// Latest movements across the whole business, newest first — the
   /// "what changed and when" feed. Server-limited; never fetch the whole
   /// ledger.

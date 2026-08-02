@@ -3,7 +3,11 @@
 // later via Settings.
 
 /// Which section of the monthly P&L a category belongs to.
-enum PlSection { revenue, cogs, operating }
+///
+/// [capital] is deliberately outside the P&L: money the owner puts in or takes
+/// out is not income or an expense, so it must never touch revenue, profit, or
+/// margins. It is tracked and totalled separately.
+enum PlSection { revenue, cogs, operating, capital }
 
 class SeedCategory {
   final String id;
@@ -32,6 +36,9 @@ const List<SeedCategory> kSeedCategories = [
       PlSection.revenue),
   SeedCategory('inc_other', 'Other Income', 'income', 'payments', 3,
       PlSection.revenue),
+  // Owner's capital in — NOT revenue (see PlSection.capital).
+  SeedCategory('inc_owner_funds', "Owner's Funds", 'income', 'savings', 4,
+      PlSection.capital),
 
   // ── Expense heads ────────────────────────────────────────────────
   // Ordered for the picker grid: payroll → food staples → beverages →
@@ -100,7 +107,18 @@ const List<SeedCategory> kSeedCategories = [
       PlSection.operating),
   SeedCategory('exp_misc', 'Miscellaneous', 'expense', 'more_horiz', 25,
       PlSection.operating),
+  // Owner's capital out — NOT an expense (see PlSection.capital).
+  SeedCategory('exp_owner_draw', "Owner's Withdrawal", 'expense',
+      'account_balance_wallet', 26, PlSection.capital),
 ];
+
+/// Owner capital categories — money the owner puts in or takes out. These are
+/// NOT income/expense for the P&L: counting them would inflate revenue/profit
+/// and distort margins, so every aggregation excludes them and they are
+/// tracked separately as "Owner's funds".
+const Set<String> kCapitalCategories = {"Owner's Funds", "Owner's Withdrawal"};
+
+bool isCapitalCategory(String name) => kCapitalCategories.contains(name);
 
 /// P&L section for a category name; unknown expense categories default to
 /// operating, unknown income to revenue.

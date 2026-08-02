@@ -57,15 +57,22 @@ class MonthlyPl {
   final List<Bucket> cogs;
   final List<Bucket> operating;
 
+  /// Owner capital in/out for the month — outside the P&L, shown separately.
+  final List<Bucket> capital;
+
   const MonthlyPl({
     required this.revenue,
     required this.cogs,
     required this.operating,
+    this.capital = const [],
   });
 
   int get totalRevenue => revenue.fold(0, (s, b) => s + b.paise);
   int get totalCogs => cogs.fold(0, (s, b) => s + b.paise);
   int get totalOperating => operating.fold(0, (s, b) => s + b.paise);
+
+  /// Net owner capital added this month (funds in − withdrawals out).
+  int get totalCapital => capital.fold(0, (s, b) => s + b.paise);
   int get grossProfit => totalRevenue - totalCogs;
   int get netProfit => grossProfit - totalOperating;
 
@@ -89,15 +96,21 @@ class MonthlyPl {
     final rev = <String, int>{};
     final cog = <String, int>{};
     final op = <String, int>{};
+    final cap = <String, int>{};
     for (final t in txns) {
       final section = plSectionFor(t.category, isIncome: t.isIncome);
+      // Capital carries a sign (funds in +, withdrawals −) so its bucket total
+      // reads as the net amount the owner has put in.
+      final signed = section == PlSection.capital && !t.isIncome
+          ? -t.amountPaise
+          : t.amountPaise;
       final map = switch (section) {
         PlSection.revenue => rev,
         PlSection.cogs => cog,
         PlSection.operating => op,
+        PlSection.capital => cap,
       };
-      map.update(t.category, (v) => v + t.amountPaise,
-          ifAbsent: () => t.amountPaise);
+      map.update(t.category, (v) => v + signed, ifAbsent: () => signed);
     }
     if (salaryForMonthPaise > 0) {
       op.update('Salaries', (v) => v + salaryForMonthPaise,
@@ -113,6 +126,7 @@ class MonthlyPl {
       revenue: sorted(rev),
       cogs: sorted(cog),
       operating: sorted(op),
+      capital: sorted(cap),
     );
   }
 }
@@ -127,6 +141,8 @@ List<Bucket> bucketize(
 }) {
   final map = <String, int>{};
   for (final t in txns) {
+    // Owner capital never belongs in a revenue/expense breakdown.
+    if (isCapitalCategory(t.category)) continue;
     if (where != null && !where(t)) continue;
     var k = key(t).trim();
     if (k.isEmpty) k = 'Uncategorized';

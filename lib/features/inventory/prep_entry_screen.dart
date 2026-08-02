@@ -113,9 +113,11 @@ class _PrepEntryScreenState extends ConsumerState<PrepEntryScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           Text(
-            'Boiled or prepped a batch and stored it? This deducts the raw '
-            'item and adds the cooked item, so you can see how much is left '
-            'in the fridge.',
+            'For items where the cooked version is counted separately — like '
+            'raw chicken → boiled chicken. This deducts the raw item and adds '
+            'the cooked item, so you can see how much cooked stock is left in '
+            'the fridge.\n\nIf it stays the same item (dal → dal), you don\'t '
+            'need prep — just record Consumption when it\'s used.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 20),
@@ -144,10 +146,21 @@ class _PrepEntryScreenState extends ConsumerState<PrepEntryScreen> {
             _qtyField(_madeQty, 'Quantity made', _made!.displayUnit),
           ],
           if (_raw != null && _made != null && _raw!.id == _made!.id)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text('Pick a different cooked item.',
-                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            Container(
+              margin: const EdgeInsets.only(top: 10),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                'Same item on both sides doesn\'t change your stock — cooking '
+                'mix dal into mix dal leaves you with the same "mix dal". '
+                'You don\'t need prep here: just record it under Consumption '
+                'when it\'s used. Use prep only when the cooked item is counted '
+                'separately (e.g. raw chicken → boiled chicken).',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
             ),
           const SizedBox(height: 16),
           TextField(
